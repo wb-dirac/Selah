@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:personal_ai_assistant/features/conversation/presentation/screens/conversation_list_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/agent/agent_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/chat/chat_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/settings/settings_screen.dart';
@@ -20,6 +21,13 @@ class AppRouter {
                 path: '/chat',
                 name: 'chat',
                 builder: (context, state) => const ChatScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'history',
+                    name: 'chat-history',
+                    builder: (context, state) => const ConversationListScreen(),
+                  ),
+                ],
               ),
             ],
           ),
