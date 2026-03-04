@@ -1,20 +1,46 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+# Project context
+context: |
+  Tech Stack:
+    - Framework: Flutter (Dart)
+    - State Management: Riverpod (Primary, AsyncNotifier), flutter_bloc (Secondary)
+    - Local LLM: llama.cpp + MLX (Apple), Ollama (Local model management)
+    - Database: SQLite with SQLCipher (Encrypted)
+    - Vector DB: sqlite-vec
+    - Security: AES-256-GCM + Argon2id, API Keys in KeyChain/KeyStore ONLY
+    - Sandbox: Pyodide (WASM) for Skills, no network access, 30s timeout
+    - Communication: A2A via HTTPS/TLS + gRPC, mDNS for discovery
+    - Routing: go_router
+    - Utilities: flutter_secure_storage, SanitizedLogger, PiiDetector
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Architecture & Directory Structure:
+    Current physical structure (Layered):
+      - lib/capability/: Atomic capabilities (llm_gateway, feature_flags)
+      - lib/orchestration/: Business logic coordination (assistant)
+      - lib/presentation/: UI layer (app, routing, screens, theme)
+      - lib/storage/: Persistence (database, security, config)
+    Target structure (Feature-based per CODING_STANDARDS/1_project_structure.md):
+      - lib/core/: Infrastructure (crypto, database, keychain, logger)
+      - lib/features/: Vertically sliced modules (conversation, privacy, sandbox)
+      - lib/shared/: Common widgets, theme, extensions
+
+  Coding Standards Highlights:
+    - Use AppLogger instead of print()
+    - API Keys must NOT be in SharedPreferences/plain files
+    - Mandatory PII detection before cloud requests
+    - All expensive computations in Isolate (compute())
+    - No empty catch blocks
+    - HTTPS only for network requests
+
+# Per-artifact rules
+rules:
+  proposal:
+    - Always include a "Security & Privacy Confirmation" section (PII/Key handling)
+    - Explicitly state the "Testing Strategy" including coverage targets (100% for crypto/privacy)
+    - Analyze architectural impact (Presentation -> Domain -> Data layers)
+  tasks:
+    - Order: Security Design -> Refactor for Testability -> Implementation + Tests -> Verification
+    - Implementation and tests must be in the same task (atomic)
+    - Every feature branch must end with a task: "Run dart tool/verify.dart and check coverage"
+    - Break tasks into chunks of max 2 hours

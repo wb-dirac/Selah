@@ -1,0 +1,1 @@
+export 'package:personal_ai_assistant/core/network/secure_http_client.dart';

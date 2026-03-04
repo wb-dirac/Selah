@@ -1,0 +1,1 @@
+export 'package:personal_ai_assistant/features/llm_gateway/data/models/openai_compatible_provider_config.dart';

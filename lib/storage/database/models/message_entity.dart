@@ -1,0 +1,1 @@
+export 'package:personal_ai_assistant/features/conversation/data/models/message_model.dart';

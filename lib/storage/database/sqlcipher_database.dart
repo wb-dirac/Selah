@@ -1,0 +1,1 @@
+export 'package:personal_ai_assistant/core/database/sqlcipher_database.dart';

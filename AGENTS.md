@@ -2,9 +2,9 @@
 # 本文件供 Coding Agent 快速了解项目工作规范
 
 ## 关键文档
-- 完整规范索引：`CODING_STANDARDS/index.md`
-- 产品需求索引：`PRD/index.md`
-- UI/UX 规范索引：`UI/index.md`
+- [完整规范索引](CODING_STANDARDS/index.md)
+- [产品需求索引](PRD/index.md)
+- [UI/UX 规范索引](UI/index.md)
 
 ## 技术栈速查
 - 框架：Flutter（Dart）

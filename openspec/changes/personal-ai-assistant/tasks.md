@@ -9,25 +9,25 @@
 
 ## 2. 本地安全存储层
 
-- [ ] 2.1 实现 SQLCipher 数据库初始化，密钥托管至 OS KeyChain/KeyStore
-- [ ] 2.2 实现对话历史 Schema（conversations / messages 表）及 CRUD DAO
+- [x] 2.1 实现 SQLCipher 数据库初始化，密钥托管至 OS KeyChain/KeyStore
+- [x] 2.2 实现对话历史 Schema（conversations / messages 表）及 CRUD DAO
 - [ ] 2.3 实现 sqlite-vec 向量扩展集成，建立文档片段向量表
 - [ ] 2.4 实现数据保留策略定时清理（默认 90 天，可配置）
 - [ ] 2.5 实现"一键清除所有本地数据"功能及二次确认流程
-- [ ] 2.6 实现日志系统 API Key 自动脱敏（`[REDACTED]` 替换）
+- [x] 2.6 实现日志系统 API Key 自动脱敏（`[REDACTED]` 替换）
 
 ## 3. LLM 网关层
 
-- [ ] 3.1 定义 `LLMGateway` 抽象接口（chat stream / embed / listModels）
-- [ ] 3.2 实现 OpenAI Compatible Provider（支持 OpenAI / DeepSeek / 智谱 / 月之暗面 / 百川 / 自定义端点）
-- [ ] 3.3 实现 Anthropic Provider（Claude 系列，原生 API）
-- [ ] 3.4 实现 Google Gemini Provider
-- [ ] 3.5 实现 Ollama 本地 Provider
-- [ ] 3.6 实现 API Key 加密存储与读取（OS KeyChain/KeyStore 封装）
-- [ ] 3.7 实现模型路由策略引擎（按复杂度、按模态、Fallback）
-- [ ] 3.8 实现 API Key 可用性测试（添加 Provider 时自动触发）
-- [ ] 3.9 实现 Token 用量统计记录与月度告警阈值通知
-- [ ] 3.10 实现 Provider 配置导入/导出（Key 字段置空）
+- [x] 3.1 定义 `LLMGateway` 抽象接口（chat stream / embed / listModels）
+- [x] 3.2 实现 OpenAI Compatible Provider（支持 OpenAI / DeepSeek / 智谱 / 月之暗面 / 百川 / 自定义端点）
+- [x] 3.3 实现 Anthropic Provider（Claude 系列，原生 API）
+- [x] 3.4 实现 Google Gemini Provider
+- [x] 3.5 实现 Ollama 本地 Provider
+- [x] 3.6 实现 API Key 加密存储与读取（OS KeyChain/KeyStore 封装）
+- [x] 3.7 实现模型路由策略引擎（按复杂度、按模态、Fallback）
+- [x] 3.8 实现 API Key 可用性测试（添加 Provider 时自动触发）
+- [x] 3.9 实现 Token 用量统计记录与月度告警阈值通知
+- [x] 3.10 实现 Provider 配置导入/导出（Key 字段置空）
 
 ## 4. 多模态对话界面
 
@@ -43,7 +43,7 @@
 - [ ] 4.10 实现超长文档 RAG 分块索引与检索（sqlite-vec）
 - [ ] 4.11 集成 Whisper.cpp（本地 STT）+ Silero VAD（语音活动检测）
 - [ ] 4.12 集成 Kokoro / Piper（本地 TTS），实现流式句子级合成播放
-- [ ] 4.13 实现实时全双工语音模式（OpenAI Realtime API 接入）
+- [ ] 4.13 实现实时全双工语音模式（Google Live API 接入）
 - [ ] 4.14 实现全屏沉浸式实时对话 UI（波形动画、Barge-in 支持、实时字幕）
 
 ## 5. 生成式 UI 运行时
