@@ -1,4 +1,8 @@
-# Personal AI Assistant
+<p align="center">
+   <img src="./LOGO.png" alt="SELAH" width="200" />
+</p>
+
+# SELAH
 
 This project is a personal AI assistant built using the Flutter framework. It provides a chat interface where users can interact with an AI model to receive responses to their queries.
 
@@ -34,24 +38,24 @@ personal-ai-assistant
 To run this project, ensure you have Flutter installed on your machine. Follow these steps:
 
 1. Clone the repository:
-   ```
-   git clone <repository-url>
-   ```
+    ```
+    git clone <repository-url>
+    ```
 
 2. Navigate to the project directory:
-   ```
-   cd personal-ai-assistant
-   ```
+    ```
+    cd personal-ai-assistant
+    ```
 
 3. Install the dependencies:
-   ```
-   flutter pub get
-   ```
+    ```
+    flutter pub get
+    ```
 
 4. Run the application:
-   ```
-   flutter run
-   ```
+    ```
+    flutter run
+    ```
 
 ## Contributing
 
