@@ -216,8 +216,10 @@ class _ConversationListScreenState
 						child: const Icon(Icons.delete, color: Colors.white),
 					),
 					confirmDismiss: (_) async {
+						// We handle removal manually after the confirmation dialog
+						// to give the user a chance to cancel before the item is removed.
 						await _deleteConversation(conv);
-						return false; // we handle removal manually
+						return false;
 					},
 					child: ListTile(
 						leading: const Icon(Icons.chat_bubble_outline),

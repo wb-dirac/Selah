@@ -104,6 +104,8 @@ class _FakePreferencesStore implements AppPreferencesStore {
 	Future<void> clearAll() async => _preferences.clear();
 }
 
+const _msPerDay = 86400000;
+
 void main() {
 	late _InMemorySqlCipherDatabase db;
 	late _FakePreferencesStore prefs;
@@ -134,8 +136,8 @@ void main() {
 	test('runCleanup deletes conversations older than retention period', () async {
 		final conn = await db.open();
 		final now = DateTime.now().millisecondsSinceEpoch;
-		final ninetyOneDaysAgo = now - 91 * 86400000;
-		final oneDayAgo = now - 86400000;
+		final ninetyOneDaysAgo = now - 91 * _msPerDay;
+		final oneDayAgo = now - _msPerDay;
 
 		await conn.insert('conversations', {
 			'id': 'old-conv',
@@ -162,7 +164,7 @@ void main() {
 	test('runCleanup cascades to messages', () async {
 		final conn = await db.open();
 		final now = DateTime.now().millisecondsSinceEpoch;
-		final oldTs = now - 100 * 86400000;
+		final oldTs = now - 100 * _msPerDay;
 
 		await conn.insert('conversations', {
 			'id': 'old-conv',
@@ -189,8 +191,8 @@ void main() {
 		await service.setRetentionDays(30);
 		final conn = await db.open();
 		final now = DateTime.now().millisecondsSinceEpoch;
-		final thirtyOneDaysAgo = now - 31 * 86400000;
-		final twentyDaysAgo = now - 20 * 86400000;
+		final thirtyOneDaysAgo = now - 31 * _msPerDay;
+		final twentyDaysAgo = now - 20 * _msPerDay;
 
 		await conn.insert('conversations', {
 			'id': 'old-conv',

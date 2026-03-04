@@ -141,7 +141,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
 				return ChatMessage(role: m.role, content: m.content);
 			}).toList();
 
-		final assistantMsgId = const Uuid().v4();
+			final assistantMsgId = const Uuid().v4();
 			final streamingMsg = DisplayMessage(
 				id: assistantMsgId,
 				role: ChatRole.assistant,
