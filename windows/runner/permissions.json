@@ -1,0 +1,34 @@
+{
+  "permissions": [
+    {
+      "id": "network",
+      "enabled": true,
+      "description": "允许访问云端 LLM 与 A2A 服务。"
+    },
+    {
+      "id": "microphone",
+      "enabled": true,
+      "description": "允许语音输入与实时对话。"
+    },
+    {
+      "id": "camera",
+      "enabled": true,
+      "description": "允许图片拍摄与 OCR 输入。"
+    },
+    {
+      "id": "location",
+      "enabled": true,
+      "description": "允许按需获取当前位置。"
+    },
+    {
+      "id": "contacts",
+      "enabled": true,
+      "description": "允许联系人读取与搜索。"
+    },
+    {
+      "id": "calendar",
+      "enabled": true,
+      "description": "允许日历读取与写入。"
+    }
+  ]
+}
