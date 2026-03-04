@@ -8,7 +8,7 @@ import 'package:sqflite_sqlcipher/sqflite.dart';
 
 const String _databaseName = 'personal_ai_assistant.db';
 const String _databaseSecretKeyName = 'storage.sqlcipher.database_key';
-const int _databaseVersion = 2;
+const int _databaseVersion = 3;
 
 class SqlCipherDatabase {
 	SqlCipherDatabase(this._keychainService);
@@ -75,6 +75,20 @@ CREATE TABLE token_usage_records (
 				await db.execute(
 					'CREATE INDEX idx_token_usage_provider_created_at ON token_usage_records(provider_id, created_at);',
 				);
+
+				await db.execute('''
+CREATE TABLE document_fragments (
+	id TEXT PRIMARY KEY,
+	source_id TEXT NOT NULL,
+	chunk_index INTEGER NOT NULL,
+	content TEXT NOT NULL,
+	embedding TEXT,
+	created_at INTEGER NOT NULL
+);
+''');
+				await db.execute(
+					'CREATE INDEX idx_document_fragments_source_id ON document_fragments(source_id);',
+				);
 			},
 			onUpgrade: (db, oldVersion, newVersion) async {
 				if (oldVersion < 2) {
@@ -90,6 +104,21 @@ CREATE TABLE IF NOT EXISTS token_usage_records (
 ''');
 					await db.execute(
 						'CREATE INDEX IF NOT EXISTS idx_token_usage_provider_created_at ON token_usage_records(provider_id, created_at);',
+					);
+				}
+				if (oldVersion < 3) {
+					await db.execute('''
+CREATE TABLE IF NOT EXISTS document_fragments (
+	id TEXT PRIMARY KEY,
+	source_id TEXT NOT NULL,
+	chunk_index INTEGER NOT NULL,
+	content TEXT NOT NULL,
+	embedding TEXT,
+	created_at INTEGER NOT NULL
+);
+''');
+					await db.execute(
+						'CREATE INDEX IF NOT EXISTS idx_document_fragments_source_id ON document_fragments(source_id);',
 					);
 				}
 			},
