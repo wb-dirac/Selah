@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_notifier.dart';
+import 'package:personal_ai_assistant/features/llm_gateway/data/models/chat_message.dart';
 
 void main() {
 	group('ChatNotifier', () {
@@ -21,7 +22,7 @@ void main() {
 
 		test('messages list is empty after initialization', () async {
 			await container.read(chatNotifierProvider.future);
-			final state = container.read(chatNotifierProvider).valueOrNull!;
+			final state = container.read(chatNotifierProvider).value!;
 			expect(state.messages, isEmpty);
 			expect(state.isStreaming, isFalse);
 			expect(state.error, isNull);
@@ -33,13 +34,13 @@ void main() {
 
 			notifier.state = const AsyncData(ChatState(error: 'test error'));
 			expect(
-				container.read(chatNotifierProvider).valueOrNull?.error,
+				container.read(chatNotifierProvider).value?.error,
 				'test error',
 			);
 
 			notifier.clearError();
 			expect(
-				container.read(chatNotifierProvider).valueOrNull?.error,
+				container.read(chatNotifierProvider).value?.error,
 				isNull,
 			);
 		});

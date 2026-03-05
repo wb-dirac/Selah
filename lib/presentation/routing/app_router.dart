@@ -3,6 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/screens/conversation_list_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/agent/agent_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/chat/chat_screen.dart';
+import 'package:personal_ai_assistant/presentation/screens/settings/provider_management_screen.dart';
+import 'package:personal_ai_assistant/presentation/screens/settings/provider_routing_screen.dart';
+import 'package:personal_ai_assistant/presentation/screens/settings/proxy_settings_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/settings/settings_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/tasks/tasks_screen.dart';
 
@@ -55,6 +58,23 @@ class AppRouter {
                 path: '/settings',
                 name: 'settings',
                 builder: (context, state) => const SettingsScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'providers',
+                    name: 'settings-providers',
+                    builder: (context, state) => const ProviderManagementScreen(),
+                  ),
+                  GoRoute(
+                    path: 'routing',
+                    name: 'settings-routing',
+                    builder: (context, state) => const ProviderRoutingScreen(),
+                  ),
+                  GoRoute(
+                    path: 'proxy',
+                    name: 'settings-proxy',
+                    builder: (context, state) => const ProxySettingsScreen(),
+                  ),
+                ],
               ),
             ],
           ),

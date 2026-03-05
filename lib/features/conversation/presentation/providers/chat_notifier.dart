@@ -112,12 +112,31 @@ class ChatState {
 }
 
 class ChatNotifier extends AsyncNotifier<ChatState> {
+  bool _didInitialize = false;
+  Future<void>? _initializeFuture;
+
   @override
   Future<ChatState> build() async {
     return const ChatState();
   }
 
   Future<void> initialize() async {
+    if (_didInitialize) return;
+    if (_initializeFuture != null) {
+      await _initializeFuture;
+      return;
+    }
+
+    _initializeFuture = _initializeInternal();
+    try {
+      await _initializeFuture;
+      _didInitialize = true;
+    } finally {
+      _initializeFuture = null;
+    }
+  }
+
+  Future<void> _initializeInternal() async {
     final service = ref.read(conversationServiceProvider);
     final conversation = await service.getOrCreateActiveConversation();
 
@@ -125,7 +144,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     final allMessages = await service.getAllMessages(conversation.id);
 
     // Batch-load attachments for all messages
-    final messageIds = allMessages.map((m) => m.id as String).toList();
+    final messageIds = allMessages.map((m) => m.id).toList();
     final attachmentsMap = await service.getAttachmentsForMessages(messageIds);
 
     // Build the branch-aware display list from raw DB entities
@@ -134,6 +153,18 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       const {},
       attachmentsMap,
     );
+
+    final current = state.value;
+    final hasLiveState =
+        current != null &&
+        (current.isStreaming || current.messages.isNotEmpty);
+
+    if (hasLiveState) {
+      if ((current!.conversationId ?? '').isEmpty) {
+        state = AsyncData(current.copyWith(conversationId: conversation.id));
+      }
+      return;
+    }
 
     state = AsyncData(
       ChatState(
@@ -155,7 +186,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     LlmGateway? gateway, {
     List<PickedImage> images = const [],
   }) async {
-    final current = state.valueOrNull;
+    final current = state.value;
     if (current == null) return;
     if (userContent.trim().isEmpty && images.isEmpty) return;
 
@@ -222,7 +253,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
 
     if (gateway == null) {
       state = AsyncData(
-        state.valueOrNull!.copyWith(
+        state.value!.copyWith(
           isStreaming: false,
           error: '请先在设置中配置 LLM 提供商',
         ),
@@ -257,7 +288,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     String assistantMessageId,
     LlmGateway? gateway,
   ) async {
-    final current = state.valueOrNull;
+    final current = state.value;
     if (current == null) return;
     if (current.isStreaming) return; // don't regenerate while streaming
 
@@ -295,7 +326,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
   /// [parentMessageId] is the user message whose assistant responses
   /// form the branch set. [siblingIndex] is the index within that set.
   void switchBranch(String parentMessageId, int siblingIndex) {
-    final current = state.valueOrNull;
+    final current = state.value;
     if (current == null) return;
 
     final updatedIndices = Map<String, int>.from(current.activeBranchIndices);
@@ -306,7 +337,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
   }
 
   void clearError() {
-    final current = state.valueOrNull;
+    final current = state.value;
     if (current == null) return;
     state = AsyncData(current.copyWith(clearError: true));
   }
@@ -342,7 +373,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
   }) async {
     try {
       // Build history from currently displayed messages (branch-aware)
-      final history = (state.valueOrNull?.messages ?? []).map((m) {
+      final history = (state.value?.messages ?? []).map((m) {
         return ChatMessage(role: m.role, content: m.content);
       }).toList();
 
@@ -405,8 +436,8 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       );
 
       state = AsyncData(
-        state.valueOrNull!.copyWith(
-          messages: [...(state.valueOrNull?.messages ?? []), streamingMsg],
+        state.value!.copyWith(
+          messages: [...(state.value?.messages ?? []), streamingMsg],
         ),
       );
 
@@ -418,11 +449,11 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
           isStreaming: true,
         );
         final msgs = List<DisplayMessage>.from(
-          state.valueOrNull?.messages ?? [],
+          state.value?.messages ?? [],
         );
         final idx = msgs.indexWhere((m) => m.id == assistantMsgId);
         if (idx >= 0) msgs[idx] = updated;
-        state = AsyncData(state.valueOrNull!.copyWith(messages: msgs));
+        state = AsyncData(state.value!.copyWith(messages: msgs));
       }
 
       // Persist the completed assistant message with parent link
@@ -438,7 +469,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
 
       // After regeneration, select the newest sibling for this parent
       final updatedIndices = Map<String, int>.from(
-        state.valueOrNull?.activeBranchIndices ?? {},
+        state.value?.activeBranchIndices ?? {},
       );
       final siblings = allMessages
           .where((m) => m.parentMessageId == parentMessageId)
@@ -447,7 +478,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
         updatedIndices[parentMessageId] = siblings.length - 1;
       }
 
-      final messageIds = allMessages.map((m) => m.id as String).toList();
+      final messageIds = allMessages.map((m) => m.id).toList();
       final attachmentsMap = await service.getAttachmentsForMessages(
         messageIds,
       );
@@ -457,24 +488,30 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
         attachmentsMap,
       );
 
+      final previousMessages = state.value?.messages ?? const <DisplayMessage>[];
+      final resolvedMessages =
+          branchState.messages.isEmpty && previousMessages.isNotEmpty
+          ? previousMessages
+          : branchState.messages;
+
       state = AsyncData(
         ChatState(
           conversationId: conversationId,
-          messages: branchState.messages,
+          messages: resolvedMessages,
           isStreaming: false,
           activeBranchIndices: branchState.activeBranchIndices,
         ),
       );
     } catch (e) {
       state = AsyncData(
-        state.valueOrNull!.copyWith(isStreaming: false, error: e.toString()),
+        state.value!.copyWith(isStreaming: false, error: e.toString()),
       );
     }
   }
 
   /// Reloads from DB and rebuilds display with given branch selections.
   Future<void> _rebuildDisplayList(Map<String, int> branchIndices) async {
-    final current = state.valueOrNull;
+    final current = state.value;
     if (current == null) return;
 
     final conversationId = current.conversationId ?? '';
@@ -482,7 +519,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
 
     final service = ref.read(conversationServiceProvider);
     final allMessages = await service.getAllMessages(conversationId);
-    final messageIds = allMessages.map((m) => m.id as String).toList();
+    final messageIds = allMessages.map((m) => m.id).toList();
     final attachmentsMap = await service.getAttachmentsForMessages(messageIds);
     final branchState = _buildBranchState(
       allMessages,

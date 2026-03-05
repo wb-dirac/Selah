@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:personal_ai_assistant/core/database/sqlcipher_database.dart';
 import 'package:personal_ai_assistant/core/keychain/keychain_service.dart';
+import 'package:personal_ai_assistant/features/conversation/data/datasources/attachment_local_datasource.dart';
 import 'package:personal_ai_assistant/features/conversation/data/datasources/conversation_local_datasource.dart';
 import 'package:personal_ai_assistant/features/conversation/data/datasources/message_local_datasource.dart';
+import 'package:personal_ai_assistant/features/conversation/data/models/attachment_model.dart';
 import 'package:personal_ai_assistant/features/conversation/data/models/conversation_model.dart';
 import 'package:personal_ai_assistant/features/conversation/data/models/message_model.dart';
 import 'package:personal_ai_assistant/features/conversation/domain/conversation_service.dart';
@@ -80,12 +82,37 @@ class _FakeMessageDao extends MessageDao {
 	}
 }
 
+class _FakeAttachmentDao extends AttachmentDao {
+	_FakeAttachmentDao() : super(_fakeDb());
+
+	final Map<String, AttachmentEntity> _store = {};
+
+	@override
+	Future<void> upsert(AttachmentEntity entity) async {
+		_store[entity.id] = entity;
+	}
+
+	@override
+	Future<Map<String, List<AttachmentEntity>>> listByMessages(
+		List<String> messageIds,
+	) async {
+		final result = <String, List<AttachmentEntity>>{};
+		for (final entity in _store.values) {
+			if (!messageIds.contains(entity.messageId)) continue;
+			result.putIfAbsent(entity.messageId, () => []);
+			result[entity.messageId]!.add(entity);
+		}
+		return result;
+	}
+}
+
 // ---------------------------------------------------------------------------
 
 ConversationService _makeService() {
 	return ConversationService(
 		conversationDao: _FakeConversationDao(),
 		messageDao: _FakeMessageDao(),
+		attachmentDao: _FakeAttachmentDao(),
 		database: _fakeDb(),
 	);
 }

@@ -25,7 +25,7 @@ class OllamaProvider implements LlmGateway {
     LlmChatOptions options = const LlmChatOptions(),
   }) async* {
     final response = await _httpClient.post(
-      _config.endpoint.resolve('/api/chat'),
+      _config.endpoint.resolve('api/chat'),
       headers: {
         'Content-Type': 'application/json',
       },
@@ -65,7 +65,7 @@ class OllamaProvider implements LlmGateway {
     String? model,
   }) async {
     final response = await _httpClient.post(
-      _config.endpoint.resolve('/api/embeddings'),
+      _config.endpoint.resolve('api/embeddings'),
       headers: {
         'Content-Type': 'application/json',
       },
@@ -94,7 +94,7 @@ class OllamaProvider implements LlmGateway {
   @override
   Future<List<LlmModelInfo>> listModels() async {
     final response = await _httpClient.get(
-      _config.endpoint.resolve('/api/tags'),
+      _config.endpoint.resolve('api/tags'),
       headers: {
         'Content-Type': 'application/json',
       },

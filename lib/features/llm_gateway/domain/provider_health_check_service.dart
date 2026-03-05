@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:personal_ai_assistant/core/network/local_http_client.dart';
+import 'package:personal_ai_assistant/core/network/proxy_settings_service.dart';
 import 'package:personal_ai_assistant/core/network/secure_http_client.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/anthropic_provider_config.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/gemini_provider_config.dart';
@@ -127,7 +128,9 @@ class ProviderHealthCheckService {
 }
 
 final secureHttpClientProvider = Provider<SecureHttpClient>((ref) {
-	return SecureHttpClient();
+	return SecureHttpClient(
+		proxySettingsService: ref.watch(proxySettingsServiceProvider),
+	);
 });
 
 final localHttpClientProvider = Provider<LocalHttpClient>((ref) {

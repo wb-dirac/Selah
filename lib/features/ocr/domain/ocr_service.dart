@@ -46,7 +46,7 @@ class OcrResult {
 ///
 /// Platform implementations:
 /// - iOS / Android: Google ML Kit Text Recognition
-/// - macOS / Windows: platform_ocr (Vision.framework / WinRT OCR)
+/// - Other platforms: currently unsupported in this app
 ///
 /// All processing is done on-device — no network calls.
 abstract class OcrService {

@@ -23,6 +23,26 @@ class GeminiProvider implements LlmGateway {
   final ProviderApiKeyStore _keyStore;
   final SecureHttpClient _httpClient;
 
+  Uri _buildUri(String relativePath) {
+    final baseEndpoint = _normalizeBaseEndpoint(_config.endpoint);
+    final normalizedPath = baseEndpoint.path.toLowerCase();
+    final hasVersionPrefix =
+        normalizedPath.endsWith('/v1') ||
+        normalizedPath.endsWith('/v1beta') ||
+        normalizedPath.contains('/v1/') ||
+        normalizedPath.contains('/v1beta/');
+    final path = hasVersionPrefix ? relativePath : 'v1beta/$relativePath';
+    return baseEndpoint.resolve(path);
+  }
+
+  Uri _normalizeBaseEndpoint(Uri endpoint) {
+    final text = endpoint.toString();
+    if (text.endsWith('/')) {
+      return endpoint;
+    }
+    return Uri.parse('$text/');
+  }
+
   @override
   Stream<ChatChunk> chat(
     List<ChatMessage> messages, {
@@ -39,7 +59,7 @@ class GeminiProvider implements LlmGateway {
     }
 
     final response = await _httpClient.post(
-      _config.endpoint.resolve('/models/$modelId:generateContent'),
+      _buildUri('models/$modelId:generateContent'),
       headers: {
         'x-goog-api-key': apiKey,
         'Content-Type': 'application/json',
@@ -109,7 +129,7 @@ class GeminiProvider implements LlmGateway {
     }
 
     final response = await _httpClient.post(
-      _config.endpoint.resolve('/models/$modelId:embedContent'),
+      _buildUri('models/$modelId:embedContent'),
       headers: {
         'x-goog-api-key': apiKey,
         'Content-Type': 'application/json',
@@ -147,7 +167,7 @@ class GeminiProvider implements LlmGateway {
     }
 
     final response = await _httpClient.get(
-      _config.endpoint.resolve('/models'),
+      _buildUri('models'),
       headers: {'x-goog-api-key': apiKey},
     );
 

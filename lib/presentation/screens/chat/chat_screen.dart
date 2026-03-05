@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:personal_ai_assistant/capability/feature_flags/feature_flag_service.dart';
-import 'package:personal_ai_assistant/features/conversation/data/models/attachment_model.dart';
+import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_gateway_resolver.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_notifier.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/widgets/branch_switcher.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/widgets/markdown_message_content.dart';
@@ -22,7 +22,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
-  List<PickedImage> _stagedImages = [];
+  final List<PickedImage> _stagedImages = [];
 
   @override
   void initState() {
@@ -39,7 +39,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _textController.text.trim();
     if (text.isEmpty && _stagedImages.isEmpty) return;
     _textController.clear();
@@ -49,10 +49,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _stagedImages.clear();
     });
 
-    // No gateway wired up yet – notifier handles the null case
-    ref
+    final gateway = await ref
+      .read(chatGatewayResolverProvider)
+      .resolveForInput(userContent: text, hasImages: images.isNotEmpty);
+    await ref
         .read(chatNotifierProvider.notifier)
-        .sendMessage(text, null, images: images);
+      .sendMessage(text, gateway, images: images);
   }
 
   Future<void> _pickImage(ImageInputSource source) async {
@@ -119,7 +121,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     // Show error via SnackBar
     ref.listen<AsyncValue<ChatState>>(chatNotifierProvider, (_, next) {
-      final error = next.valueOrNull?.error;
+      final error = next.value?.error;
       if (error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -344,10 +346,12 @@ class _MessageBubble extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.refresh),
                 title: const Text('重新生成'),
-                onTap: () {
+                onTap: () async {
                   Navigator.of(ctx).pop();
-                  // gateway is null for now — notifier handles the error
-                  notifier.regenerateMessage(message.id, null);
+                  final gateway = await ref
+                      .read(chatGatewayResolverProvider)
+                      .resolve();
+                  await notifier.regenerateMessage(message.id, gateway);
                 },
               ),
             ],

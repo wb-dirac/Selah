@@ -16,7 +16,6 @@ class _FakeKeyStore extends ProviderApiKeyStore {
   Future<String?> read({required String providerId}) async => _value;
 }
 
-class _NoopKeychain implements dynamic {
 class _NoopKeychain implements KeychainService {
   @override
   Future<void> delete({required String key}) async {}
@@ -32,9 +31,9 @@ class _NoopKeychain implements KeychainService {
 }
 
 void main() {
-  test('GeminiProvider listModels parses response', () async {
+  test('GeminiProvider listModels keeps v1beta prefix when baseUrl has version', () async {
     final mockClient = MockClient((request) async {
-      expect(request.url.toString(), contains('/models'));
+      expect(request.url.toString(), contains('/v1beta/models'));
       return http.Response(
         '{"models":[{"name":"models/gemini-2.5-pro","displayName":"Gemini 2.5 Pro"}]}',
         200,
@@ -50,5 +49,27 @@ void main() {
     final models = await provider.listModels();
     expect(models, hasLength(1));
     expect(models.first.id, equals('gemini-2.5-pro'));
+  });
+
+  test('GeminiProvider listModels auto-adds v1beta when baseUrl has no version', () async {
+    final mockClient = MockClient((request) async {
+      expect(request.url.toString(), contains('/v1beta/models'));
+      return http.Response(
+        '{"models":[{"name":"models/gemini-2.5-flash","displayName":"Gemini 2.5 Flash"}]}',
+        200,
+      );
+    });
+
+    final provider = GeminiProvider(
+      config: const GeminiProviderConfig(
+        baseUrl: 'https://generativelanguage.googleapis.com',
+      ),
+      keyStore: _FakeKeyStore('AIza12345678901234567890123456789012345'),
+      httpClient: SecureHttpClient(client: mockClient),
+    );
+
+    final models = await provider.listModels();
+    expect(models, hasLength(1));
+    expect(models.first.id, equals('gemini-2.5-flash'));
   });
 }

@@ -34,7 +34,7 @@ class OpenAiCompatibleProvider implements LlmGateway {
 		}
 
 		final response = await _httpClient.post(
-			_config.baseUrl.resolve('/chat/completions'),
+			_config.baseUrl.resolve('chat/completions'),
 			headers: {
 				'Authorization': 'Bearer $apiKey',
 				'Content-Type': 'application/json',
@@ -91,7 +91,7 @@ class OpenAiCompatibleProvider implements LlmGateway {
 		}
 
 		final response = await _httpClient.post(
-			_config.baseUrl.resolve('/embeddings'),
+			_config.baseUrl.resolve('embeddings'),
 			headers: {
 				'Authorization': 'Bearer $apiKey',
 				'Content-Type': 'application/json',
@@ -132,7 +132,7 @@ class OpenAiCompatibleProvider implements LlmGateway {
 		}
 
 		final response = await _httpClient.get(
-			_config.baseUrl.resolve('/models'),
+			_config.baseUrl.resolve('models'),
 			headers: {
 				'Authorization': 'Bearer $apiKey',
 			},

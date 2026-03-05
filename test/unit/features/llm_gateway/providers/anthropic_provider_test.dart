@@ -16,7 +16,6 @@ class _FakeKeyStore extends ProviderApiKeyStore {
   Future<String?> read({required String providerId}) async => _value;
 }
 
-class _NoopKeychain implements dynamic {
 class _NoopKeychain implements KeychainService {
   @override
   Future<void> delete({required String key}) async {}

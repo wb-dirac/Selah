@@ -48,7 +48,7 @@ class AnthropicProvider implements LlmGateway {
         .join('\n');
 
     final response = await _httpClient.post(
-      _config.endpoint.resolve('/messages'),
+      _config.endpoint.resolve('messages'),
       headers: {
         'x-api-key': apiKey,
         'anthropic-version': _config.apiVersion,
@@ -99,7 +99,7 @@ class AnthropicProvider implements LlmGateway {
     }
 
     final response = await _httpClient.get(
-      _config.endpoint.resolve('/models'),
+      _config.endpoint.resolve('models'),
       headers: {
         'x-api-key': apiKey,
         'anthropic-version': _config.apiVersion,

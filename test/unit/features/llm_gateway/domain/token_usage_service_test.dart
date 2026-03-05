@@ -6,7 +6,7 @@ import 'package:personal_ai_assistant/features/llm_gateway/domain/token_usage_se
 
 class _FakeTokenUsageDataSource implements TokenUsageLocalDataSource {
   final List<TokenUsageRecord> records = <TokenUsageRecord>[];
-  MonthlyTokenUsage monthly = const MonthlyTokenUsage(
+  MonthlyTokenUsage monthly = MonthlyTokenUsage(
     providerId: 'openai',
     month: DateTime(2026, 3),
     promptTokens: 0,
@@ -64,7 +64,7 @@ void main() {
       final dataSource = _FakeTokenUsageDataSource();
       final service = TokenUsageService(dataSource);
 
-      const usage = MonthlyTokenUsage(
+      final usage = MonthlyTokenUsage(
         providerId: 'openai',
         month: DateTime(2026, 3),
         promptTokens: 600,

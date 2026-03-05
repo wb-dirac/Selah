@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,7 +43,7 @@ class MlKitOcrProvider implements OcrService {
         // Determine the primary language of this block
         final languages = block.recognizedLanguages;
         final langCode = languages.isNotEmpty
-            ? languages.first.languageCode
+          ? languages.first
             : null;
 
         // Average confidence across block elements
@@ -91,12 +92,14 @@ class MlKitOcrProvider implements OcrService {
 
   @override
   Future<void> dispose() async {
-    _recognizer.close();
+    await _recognizer.close();
   }
 }
 
 final mlKitOcrProvider = Provider<MlKitOcrProvider>((ref) {
   final provider = MlKitOcrProvider();
-  ref.onDispose(() => provider.dispose());
+  ref.onDispose(() {
+    unawaited(provider.dispose());
+  });
   return provider;
 });

@@ -6,9 +6,6 @@ class FlutterSecureKeychainService implements KeychainService {
 	FlutterSecureKeychainService({FlutterSecureStorage? secureStorage})
 			: _secureStorage = secureStorage ??
 						const FlutterSecureStorage(
-							aOptions: AndroidOptions(
-								encryptedSharedPreferences: true,
-							),
 							iOptions: IOSOptions(
 								accessibility: KeychainAccessibility.first_unlock,
 							),
