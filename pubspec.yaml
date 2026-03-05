@@ -42,6 +42,13 @@ dependencies:
   sqflite_sqlcipher: ^3.4.0
   uuid: ^4.5.1
   flutter_markdown: ^0.7.7
+  image_picker: ^1.1.2
+  desktop_drop: ^0.5.0
+  super_clipboard: ^0.8.0
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  google_mlkit_text_recognition: ^0.15.1
+  platform_ocr: ^1.0.0
 
 dev_dependencies:
   flutter_test:
