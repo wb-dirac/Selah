@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:personal_ai_assistant/features/conversation/data/datasources/conversation_local_datasource.dart';
 import 'package:personal_ai_assistant/features/conversation/data/models/conversation_model.dart';
 import 'package:personal_ai_assistant/features/conversation/domain/conversation_service.dart';
+import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_notifier.dart';
 
 class ConversationListScreen extends ConsumerStatefulWidget {
 	const ConversationListScreen({super.key});
@@ -145,16 +146,33 @@ class _ConversationListScreenState
 		}
 	}
 
-	void _openConversation(ConversationEntity conv) {
-		// Navigate to chat and load the selected conversation
-		// For now, just go back to chat (gateway wiring is a later task)
-		context.pop();
+	Future<void> _openConversation(ConversationEntity conv) async {
+		await ref.read(chatNotifierProvider.notifier).loadConversation(conv.id);
+		if (mounted) {
+			context.pop();
+		}
+	}
+
+	Future<void> _createConversation() async {
+		await ref.read(chatNotifierProvider.notifier).startNewConversation();
+		if (mounted) {
+			context.pop();
+		}
 	}
 
 	@override
 	Widget build(BuildContext context) {
 		return Scaffold(
-			appBar: AppBar(title: const Text('对话历史')),
+			appBar: AppBar(
+				title: const Text('对话历史'),
+				actions: [
+					IconButton(
+						onPressed: _createConversation,
+						icon: const Icon(Icons.add),
+						tooltip: '新建会话',
+					),
+				],
+			),
 			body: Column(
 				children: [
 					Padding(
@@ -162,7 +180,7 @@ class _ConversationListScreenState
 						child: TextField(
 							controller: _searchController,
 							decoration: const InputDecoration(
-								hintText: '搜索对话…',
+								hintText: '搜索消息内容、工具调用记录...',
 								prefixIcon: Icon(Icons.search),
 								border: OutlineInputBorder(
 									borderRadius: BorderRadius.all(Radius.circular(24)),
@@ -221,14 +239,16 @@ class _ConversationListScreenState
 						await _deleteConversation(conv);
 						return false;
 					},
-					child: ListTile(
-						leading: const Icon(Icons.chat_bubble_outline),
-						title: Text(conv.title ?? '未命名对话'),
-						subtitle: Text(
-							_formatDate(conv.updatedAt),
-							style: const TextStyle(fontSize: 12, color: Colors.grey),
+					child: SizedBox(
+						height: 68,
+						child: ListTile(
+							title: Text(conv.title ?? '未命名对话'),
+							subtitle: Text(
+								_formatDate(conv.updatedAt),
+								style: const TextStyle(fontSize: 12, color: Colors.grey),
+							),
+							onTap: () => _openConversation(conv),
 						),
-						onTap: () => _openConversation(conv),
 					),
 				);
 			},

@@ -81,11 +81,11 @@ class SecureHttpClient {
 
 	Future<_HttpClientContext> _resolveClientContext() async {
 		if (_client != null) {
-			return _HttpClientContext(client: _client!, shouldClose: false);
+			return _HttpClientContext(client: _client, shouldClose: false);
 		}
 
 		if (_fallbackClient != null) {
-			return _HttpClientContext(client: _fallbackClient!, shouldClose: false);
+			return _HttpClientContext(client: _fallbackClient, shouldClose: false);
 		}
 
 		final settings = await _proxySettingsService?.load() ??

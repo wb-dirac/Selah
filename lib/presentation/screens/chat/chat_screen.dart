@@ -107,6 +107,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
+  Future<void> _startNewConversation() async {
+    _textController.clear();
+    setState(() {
+      _stagedImages.clear();
+    });
+    await ref.read(chatNotifierProvider.notifier).startNewConversation();
+  }
+
   @override
   Widget build(BuildContext context) {
     final flags = ref.watch(featureFlagServiceProvider);
@@ -143,6 +151,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         title: const Text('对话'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.add),
+            tooltip: '新建会话',
+            onPressed: _startNewConversation,
+          ),
+          IconButton(
             icon: const Icon(Icons.history),
             tooltip: '对话历史',
             onPressed: () => context.push('/chat/history'),
@@ -169,12 +182,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               Expanded(
                 child: state.messages.isEmpty
                     ? const Center(
+                        key: ValueKey('chat_empty_state'),
                         child: Text(
                           '发送消息开始对话',
                           style: TextStyle(color: Colors.grey),
                         ),
                       )
                     : ListView.builder(
+                        key: const ValueKey('chat_message_list'),
                         controller: _scrollController,
                         reverse: true,
                         padding: const EdgeInsets.symmetric(
@@ -390,6 +405,7 @@ class _InputRow extends StatelessWidget {
             ),
             Expanded(
               child: TextField(
+                key: const ValueKey('chat_input'),
                 controller: controller,
                 enabled: !isStreaming,
                 minLines: 1,
@@ -416,6 +432,7 @@ class _InputRow extends StatelessWidget {
                     !isStreaming &&
                     (value.text.trim().isNotEmpty || hasStagedImages);
                 return IconButton.filled(
+                  key: const ValueKey('chat_send_button'),
                   icon: const Icon(Icons.send),
                   onPressed: canSend ? onSend : null,
                 );

@@ -25,6 +25,18 @@ class ConversationService {
   final SqlCipherDatabase _database;
   static const _uuid = Uuid();
 
+  Future<ConversationEntity> createConversation({String? title}) async {
+    final now = DateTime.now();
+    final entity = ConversationEntity(
+      id: _uuid.v4(),
+      title: title,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await _conversationDao.upsert(entity);
+    return entity;
+  }
+
   Future<ConversationEntity> getOrCreateActiveConversation() async {
     final list = await _conversationDao.list(page: 0, pageSize: 1);
     if (list.isNotEmpty) {
@@ -38,6 +50,10 @@ class ConversationService {
     );
     await _conversationDao.upsert(entity);
     return entity;
+  }
+
+  Future<ConversationEntity?> getConversationById(String id) {
+    return _conversationDao.findById(id);
   }
 
   Future<List<MessageEntity>> getMessages(

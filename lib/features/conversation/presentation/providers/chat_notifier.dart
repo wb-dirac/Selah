@@ -160,7 +160,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
         (current.isStreaming || current.messages.isNotEmpty);
 
     if (hasLiveState) {
-      if ((current!.conversationId ?? '').isEmpty) {
+      if ((current.conversationId ?? '').isEmpty) {
         state = AsyncData(current.copyWith(conversationId: conversation.id));
       }
       return;
@@ -342,6 +342,47 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     state = AsyncData(current.copyWith(clearError: true));
   }
 
+  Future<void> startNewConversation() async {
+    final service = ref.read(conversationServiceProvider);
+    final conversation = await service.createConversation();
+    state = AsyncData(
+      ChatState(
+        conversationId: conversation.id,
+        messages: const [],
+        activeBranchIndices: const {},
+      ),
+    );
+  }
+
+  Future<void> loadConversation(String conversationId) async {
+    final service = ref.read(conversationServiceProvider);
+    final conversation = await service.getConversationById(conversationId);
+    if (conversation == null) {
+      final current = state.value;
+      if (current != null) {
+        state = AsyncData(current.copyWith(error: '会话不存在或已删除'));
+      }
+      return;
+    }
+
+    final allMessages = await service.getAllMessages(conversation.id);
+    final messageIds = allMessages.map((m) => m.id).toList();
+    final attachmentsMap = await service.getAttachmentsForMessages(messageIds);
+    final branchState = _buildBranchState(
+      allMessages,
+      const {},
+      attachmentsMap,
+    );
+
+    state = AsyncData(
+      ChatState(
+        conversationId: conversation.id,
+        messages: branchState.messages,
+        activeBranchIndices: branchState.activeBranchIndices,
+      ),
+    );
+  }
+
   // ─── Private helpers ─────────────────────────────────────────────
 
   /// Default context window size used when the model does not report one.
@@ -457,12 +498,43 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       }
 
       // Persist the completed assistant message with parent link
-      await service.addMessage(
+      final savedAssistant = await service.addMessage(
         conversationId: conversationId,
         role: 'assistant',
         content: buffer.toString(),
         parentMessageId: parentMessageId,
       );
+
+      // Fast path: for normal single-branch flow, avoid full DB reload/rebuild.
+      // Keep UI state incremental for better performance.
+      final siblingCount = (await service.getSiblings(parentMessageId)).length;
+      final shouldRebuildFromDb =
+          compressionResult.wasCompressed || siblingCount > 1;
+
+      if (!shouldRebuildFromDb) {
+        final current = state.value;
+        if (current != null) {
+          final msgs = List<DisplayMessage>.from(current.messages);
+          final idx = msgs.indexWhere((m) => m.id == assistantMsgId);
+          if (idx >= 0) {
+            msgs[idx] = DisplayMessage(
+              id: savedAssistant.id,
+              role: ChatRole.assistant,
+              content: buffer.toString(),
+              createdAt: savedAssistant.createdAt,
+              isStreaming: false,
+              parentMessageId: parentMessageId,
+            );
+          }
+          state = AsyncData(
+            current.copyWith(
+              messages: msgs,
+              isStreaming: false,
+            ),
+          );
+        }
+        return;
+      }
 
       // Reload all messages from DB and rebuild display with branch info
       final allMessages = await service.getAllMessages(conversationId);
