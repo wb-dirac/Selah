@@ -1,217 +1,476 @@
+import 'dart:io';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:personal_ai_assistant/capability/feature_flags/feature_flag_service.dart';
+import 'package:personal_ai_assistant/features/conversation/data/models/attachment_model.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_notifier.dart';
+import 'package:personal_ai_assistant/features/conversation/presentation/widgets/branch_switcher.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/widgets/markdown_message_content.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/chat_message.dart';
+import 'package:personal_ai_assistant/orchestration/media/image_input_service.dart';
 import 'package:personal_ai_assistant/presentation/screens/widgets/feature_disabled_view.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
-	const ChatScreen({super.key});
+  const ChatScreen({super.key});
 
-	@override
-	ConsumerState<ChatScreen> createState() => _ChatScreenState();
+  @override
+  ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
-	final _textController = TextEditingController();
-	final _scrollController = ScrollController();
+  final _textController = TextEditingController();
+  final _scrollController = ScrollController();
+  List<PickedImage> _stagedImages = [];
 
-	@override
-	void initState() {
-		super.initState();
-		Future.microtask(() => ref.read(chatNotifierProvider.notifier).initialize());
-	}
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(
+      () => ref.read(chatNotifierProvider.notifier).initialize(),
+    );
+  }
 
-	@override
-	void dispose() {
-		_textController.dispose();
-		_scrollController.dispose();
-		super.dispose();
-	}
+  @override
+  void dispose() {
+    _textController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
-	void _sendMessage() {
-		final text = _textController.text.trim();
-		if (text.isEmpty) return;
-		_textController.clear();
-		// No gateway wired up yet – notifier handles the null case
-		ref.read(chatNotifierProvider.notifier).sendMessage(text, null);
-	}
+  void _sendMessage() {
+    final text = _textController.text.trim();
+    if (text.isEmpty && _stagedImages.isEmpty) return;
+    _textController.clear();
 
-	@override
-	Widget build(BuildContext context) {
-		final flags = ref.watch(featureFlagServiceProvider);
-		if (!flags.isEnabled(AppFeatureModule.multimodalChat)) {
-			return const FeatureDisabledView(
-				title: '多模态对话已关闭',
-				message: '请在 Feature Flag 中启用 multimodalChat 模块。',
-			);
-		}
+    final images = List<PickedImage>.from(_stagedImages);
+    setState(() {
+      _stagedImages.clear();
+    });
 
-		final chatAsync = ref.watch(chatNotifierProvider);
+    // No gateway wired up yet – notifier handles the null case
+    ref
+        .read(chatNotifierProvider.notifier)
+        .sendMessage(text, null, images: images);
+  }
 
-		// Show error via SnackBar
-		ref.listen<AsyncValue<ChatState>>(chatNotifierProvider, (_, next) {
-			final error = next.valueOrNull?.error;
-			if (error != null) {
-				ScaffoldMessenger.of(context).showSnackBar(
-					SnackBar(
-						content: Text(error),
-						action: SnackBarAction(
-							label: '关闭',
-							onPressed: () {
-								ref.read(chatNotifierProvider.notifier).clearError();
-							},
-						),
-					),
-				);
-				ref.read(chatNotifierProvider.notifier).clearError();
-			}
-		});
+  Future<void> _pickImage(ImageInputSource source) async {
+    final service = ref.read(imageInputServiceProvider);
+    PickedImage? image;
+    if (source == ImageInputSource.camera) {
+      image = await service.pickFromCamera();
+    } else if (source == ImageInputSource.gallery) {
+      image = await service.pickFromGallery();
+    }
+    if (image != null) {
+      setState(() {
+        _stagedImages.add(image!);
+      });
+    }
+  }
 
-		return Scaffold(
-			appBar: AppBar(
-				title: const Text('对话'),
-				actions: [
-					IconButton(
-						icon: const Icon(Icons.history),
-						tooltip: '对话历史',
-						onPressed: () => context.push('/chat/history'),
-					),
-				],
-			),
-			body: chatAsync.when(
-				loading: () => const Center(child: CircularProgressIndicator()),
-				error: (e, _) => Center(child: Text('加载失败: $e')),
-				data: (state) => Column(
-					children: [
-						Expanded(
-							child: state.messages.isEmpty
-									? const Center(
-											child: Text(
-												'发送消息开始对话',
-												style: TextStyle(color: Colors.grey),
-											),
-										)
-									: ListView.builder(
-											controller: _scrollController,
-											reverse: true,
-											padding: const EdgeInsets.symmetric(
-												horizontal: 12,
-												vertical: 8,
-											),
-											itemCount: state.messages.length,
-											itemBuilder: (context, index) {
-												final msg = state.messages[
-														state.messages.length - 1 - index];
-												return _MessageBubble(message: msg);
-											},
-										),
-						),
-						if (state.isStreaming)
-							const LinearProgressIndicator(minHeight: 2),
-						_InputRow(
-							controller: _textController,
-							isStreaming: state.isStreaming,
-							onSend: _sendMessage,
-						),
-					],
-				),
-			),
-		);
-	}
+  void _showAttachmentOptions() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('拍照'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageInputSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('相册'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageInputSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _stagedImages.removeAt(index);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final flags = ref.watch(featureFlagServiceProvider);
+    if (!flags.isEnabled(AppFeatureModule.multimodalChat)) {
+      return const FeatureDisabledView(
+        title: '多模态对话已关闭',
+        message: '请在 Feature Flag 中启用 multimodalChat 模块。',
+      );
+    }
+
+    final chatAsync = ref.watch(chatNotifierProvider);
+
+    // Show error via SnackBar
+    ref.listen<AsyncValue<ChatState>>(chatNotifierProvider, (_, next) {
+      final error = next.valueOrNull?.error;
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error),
+            action: SnackBarAction(
+              label: '关闭',
+              onPressed: () {
+                ref.read(chatNotifierProvider.notifier).clearError();
+              },
+            ),
+          ),
+        );
+        ref.read(chatNotifierProvider.notifier).clearError();
+      }
+    });
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('对话'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: '对话历史',
+            onPressed: () => context.push('/chat/history'),
+          ),
+        ],
+      ),
+      body: chatAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('加载失败: $e')),
+        data: (state) => DropTarget(
+          onDragDone: (detail) async {
+            final service = ref.read(imageInputServiceProvider);
+            for (final file in detail.files) {
+              final result = await service.processDragAndDrop(file.path);
+              if (result != null) {
+                setState(() {
+                  _stagedImages.add(result);
+                });
+              }
+            }
+          },
+          child: Column(
+            children: [
+              Expanded(
+                child: state.messages.isEmpty
+                    ? const Center(
+                        child: Text(
+                          '发送消息开始对话',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        reverse: true,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        itemCount: state.messages.length,
+                        itemBuilder: (context, index) {
+                          final msg =
+                              state.messages[state.messages.length - 1 - index];
+                          return _MessageBubble(message: msg);
+                        },
+                      ),
+              ),
+              if (state.isStreaming)
+                const LinearProgressIndicator(minHeight: 2),
+              if (_stagedImages.isNotEmpty)
+                _StagedImagesRow(images: _stagedImages, onRemove: _removeImage),
+              _InputRow(
+                controller: _textController,
+                isStreaming: state.isStreaming,
+                hasStagedImages: _stagedImages.isNotEmpty,
+                onSend: _sendMessage,
+                onAttach: _showAttachmentOptions,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _MessageBubble extends StatelessWidget {
-	const _MessageBubble({required this.message});
+class _MessageBubble extends ConsumerWidget {
+  const _MessageBubble({required this.message});
 
-	final DisplayMessage message;
+  final DisplayMessage message;
 
-	@override
-	Widget build(BuildContext context) {
-		final isUser = message.role == ChatRole.user;
-		final theme = Theme.of(context);
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Context compression summary — render as a separator, not a bubble.
+    if (message.isSummaryMarker) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            const Expanded(child: Divider(color: Colors.grey)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                '上下文已压缩',
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+              ),
+            ),
+            const Expanded(child: Divider(color: Colors.grey)),
+          ],
+        ),
+      );
+    }
 
-		return Align(
-			alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-			child: Container(
-				margin: const EdgeInsets.symmetric(vertical: 4),
-				padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-				constraints: BoxConstraints(
-					maxWidth: MediaQuery.of(context).size.width * 0.75,
-				),
-				decoration: BoxDecoration(
-					color: isUser
-							? theme.colorScheme.primary
-							: theme.colorScheme.surfaceContainerHighest,
-					borderRadius: BorderRadius.only(
-						topLeft: const Radius.circular(16),
-						topRight: const Radius.circular(16),
-						bottomLeft: Radius.circular(isUser ? 16 : 4),
-						bottomRight: Radius.circular(isUser ? 4 : 16),
-					),
-				),
-				child: isUser
-						? Text(
-								message.content,
-								style: TextStyle(
-									color: theme.colorScheme.onPrimary,
-								),
-							)
-						: MarkdownMessageContent(content: message.content),
-			),
-		);
-	}
+    final isUser = message.role == ChatRole.user;
+    final isAssistant = message.role == ChatRole.assistant;
+    final theme = Theme.of(context);
+
+    final bubble = Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width * 0.75,
+      ),
+      decoration: BoxDecoration(
+        color: isUser
+            ? theme.colorScheme.primary
+            : theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(16),
+          topRight: const Radius.circular(16),
+          bottomLeft: Radius.circular(isUser ? 16 : 4),
+          bottomRight: Radius.circular(isUser ? 4 : 16),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (message.hasImages) ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: message.attachments
+                  .where((a) => a.type == 'image')
+                  .map(
+                    (a) => ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(
+                        File(a.filePath),
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 4),
+          ],
+          isUser
+              ? Text(
+                  message.content,
+                  style: TextStyle(color: theme.colorScheme.onPrimary),
+                )
+              : MarkdownMessageContent(content: message.content),
+        ],
+      ),
+    );
+
+    // Wrap assistant messages with long-press context menu and branch switcher
+    if (isAssistant) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GestureDetector(
+              onLongPress: () => _showRegenerateMenu(context, ref),
+              child: bubble,
+            ),
+            if (message.hasBranches)
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 4),
+                child: BranchSwitcher(
+                  currentIndex: message.activeSiblingIndex,
+                  totalBranches: message.siblingIds.length,
+                  onPrevious: () {
+                    ref
+                        .read(chatNotifierProvider.notifier)
+                        .switchBranch(
+                          message.parentMessageId!,
+                          message.activeSiblingIndex - 1,
+                        );
+                  },
+                  onNext: () {
+                    ref
+                        .read(chatNotifierProvider.notifier)
+                        .switchBranch(
+                          message.parentMessageId!,
+                          message.activeSiblingIndex + 1,
+                        );
+                  },
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    return Align(alignment: Alignment.centerRight, child: bubble);
+  }
+
+  void _showRegenerateMenu(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(chatNotifierProvider.notifier);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.refresh),
+                title: const Text('重新生成'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  // gateway is null for now — notifier handles the error
+                  notifier.regenerateMessage(message.id, null);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _InputRow extends StatelessWidget {
-	const _InputRow({
-		required this.controller,
-		required this.isStreaming,
-		required this.onSend,
-	});
+  const _InputRow({
+    required this.controller,
+    required this.isStreaming,
+    required this.hasStagedImages,
+    required this.onSend,
+    this.onAttach,
+  });
 
-	final TextEditingController controller;
-	final bool isStreaming;
-	final VoidCallback onSend;
+  final TextEditingController controller;
+  final bool isStreaming;
+  final bool hasStagedImages;
+  final VoidCallback onSend;
+  final VoidCallback? onAttach;
 
-	@override
-	Widget build(BuildContext context) {
-		return SafeArea(
-			child: Padding(
-				padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-				child: Row(
-					children: [
-						Expanded(
-							child: TextField(
-								controller: controller,
-								enabled: !isStreaming,
-								minLines: 1,
-								maxLines: 4,
-								textInputAction: TextInputAction.send,
-								onSubmitted: (_) => onSend(),
-								decoration: const InputDecoration(
-									hintText: '输入消息…',
-									border: OutlineInputBorder(
-										borderRadius: BorderRadius.all(Radius.circular(24)),
-									),
-									contentPadding: EdgeInsets.symmetric(
-										horizontal: 16,
-										vertical: 10,
-									),
-								),
-							),
-						),
-						const SizedBox(width: 8),
-						IconButton.filled(
-							icon: const Icon(Icons.send),
-							onPressed: isStreaming ? null : onSend,
-						),
-					],
-				),
-			),
-		);
-	}
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.add_photo_alternate),
+              onPressed: isStreaming ? null : onAttach,
+            ),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                enabled: !isStreaming,
+                minLines: 1,
+                maxLines: 4,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => onSend(),
+                decoration: const InputDecoration(
+                  hintText: '输入消息…',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(24)),
+                  ),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, child) {
+                final canSend =
+                    !isStreaming &&
+                    (value.text.trim().isNotEmpty || hasStagedImages);
+                return IconButton.filled(
+                  icon: const Icon(Icons.send),
+                  onPressed: canSend ? onSend : null,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
+class _StagedImagesRow extends StatelessWidget {
+  const _StagedImagesRow({required this.images, required this.onRemove});
+
+  final List<PickedImage> images;
+  final void Function(int) onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    if (images.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 80,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        itemCount: images.length,
+        itemBuilder: (context, index) {
+          final img = images[index];
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    File(img.filePath),
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: () => onRemove(index),
+                    child: const CircleAvatar(
+                      radius: 10,
+                      backgroundColor: Colors.black54,
+                      child: Icon(Icons.close, size: 14, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
