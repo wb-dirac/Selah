@@ -1,3 +1,6 @@
+import 'dart:developer' as developer;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:personal_ai_assistant/core/database/sqlcipher_database.dart';
 import 'package:personal_ai_assistant/features/conversation/data/models/message_model.dart';
@@ -13,8 +16,18 @@ class MessageDao {
     await db.insert(
       'messages',
       entity.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    if (kDebugMode) {
+      final rows = await db.rawQuery(
+        'SELECT COUNT(*) as cnt FROM messages WHERE conversation_id = ?',
+        [entity.conversationId],
+      );
+      _log('upsert:snapshot', {
+        'messageId': entity.id,
+        'conversationId': entity.conversationId,
+        'totalRows': (rows.first['cnt'] as int? ?? 0),
+      });
+    }
   }
 
   Future<MessageEntity?> findById(String id) async {
@@ -87,7 +100,19 @@ class MessageDao {
       whereArgs: [conversationId],
       orderBy: 'created_at ASC',
     );
+    if (kDebugMode) {
+      _log('listAllByConversation', {
+        'conversationId': conversationId,
+        'count': rows.length,
+      });
+    }
     return rows.map(MessageEntity.fromMap).toList();
+  }
+
+  void _log(String event, Map<String, Object?> context) {
+    if (kDebugMode) {
+      developer.log('[MessageDao] $event $context', name: 'MessageDao');
+    }
   }
 
   Future<void> softDelete(String id, {DateTime? deletedAt}) async {

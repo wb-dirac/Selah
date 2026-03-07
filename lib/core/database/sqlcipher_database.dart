@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +9,7 @@ import 'package:sqflite_sqlcipher/sqflite.dart';
 
 const String _databaseName = 'personal_ai_assistant.db';
 const String _databaseSecretKeyName = 'storage.sqlcipher.database_key';
-const int _databaseVersion = 5;
+const int _databaseVersion = 6;
 
 class SqlCipherDatabase {
   SqlCipherDatabase(this._keychainService);
@@ -172,11 +173,162 @@ CREATE TABLE IF NOT EXISTS message_attachments (
             'CREATE INDEX IF NOT EXISTS idx_message_attachments_message_id ON message_attachments(message_id);',
           );
         }
+        if (oldVersion < 6) {
+          // Rebuild messages table to remove any legacy unexpected constraints
+          // (for example, accidental uniqueness on conversation_id) that can
+          // silently collapse history to one row when using inserts.
+          await db.execute('PRAGMA foreign_keys = OFF;');
+          await db.transaction((txn) async {
+            await txn.execute('ALTER TABLE messages RENAME TO messages_old;');
+            await txn.execute('''
+CREATE TABLE messages (
+	id TEXT PRIMARY KEY,
+	conversation_id TEXT NOT NULL,
+	role TEXT NOT NULL,
+	content TEXT NOT NULL,
+	created_at INTEGER NOT NULL,
+	deleted_at INTEGER,
+	parent_message_id TEXT,
+	FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+''');
+            await txn.execute('''
+INSERT INTO messages (
+	id,
+	conversation_id,
+	role,
+	content,
+	created_at,
+	deleted_at,
+	parent_message_id
+)
+SELECT
+	id,
+	conversation_id,
+	role,
+	content,
+	created_at,
+	deleted_at,
+	parent_message_id
+FROM messages_old;
+''');
+            await txn.execute('DROP TABLE messages_old;');
+            await txn.execute(
+              'CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at ON messages(conversation_id, created_at);',
+            );
+            await txn.execute(
+              'CREATE INDEX IF NOT EXISTS idx_messages_parent_message_id ON messages(parent_message_id);',
+            );
+          });
+          await db.execute('PRAGMA foreign_keys = ON;');
+        }
       },
     );
 
+    await _ensureMessagesSchemaHealthy(database);
+
     _database = database;
     return database;
+  }
+
+  Future<void> _ensureMessagesSchemaHealthy(Database db) async {
+    final tableInfo = await db.rawQuery('PRAGMA table_info(messages);');
+    if (tableInfo.isEmpty) {
+      return;
+    }
+
+    final hasIdPrimaryKey = tableInfo.any(
+      (row) => row['name'] == 'id' && (row['pk'] as int? ?? 0) == 1,
+    );
+    final hasConversationId = tableInfo.any(
+      (row) => row['name'] == 'conversation_id',
+    );
+    final hasUnexpectedPrimaryKey = tableInfo.any(
+      (row) => (row['pk'] as int? ?? 0) > 0 && row['name'] != 'id',
+    );
+
+    final indexList = await db.rawQuery('PRAGMA index_list(messages);');
+    var hasUniqueConversationIndex = false;
+    for (final index in indexList) {
+      final isUnique = (index['unique'] as int? ?? 0) == 1;
+      if (!isUnique) continue;
+      final indexName = (index['name'] ?? '').toString();
+      if (indexName.isEmpty) continue;
+      final indexInfo = await db.rawQuery('PRAGMA index_info($indexName);');
+      final includesConversationId = indexInfo.any(
+        (row) => row['name'] == 'conversation_id',
+      );
+      if (includesConversationId) {
+        hasUniqueConversationIndex = true;
+        break;
+      }
+    }
+
+    final healthy =
+        hasIdPrimaryKey &&
+        hasConversationId &&
+        !hasUnexpectedPrimaryKey &&
+        !hasUniqueConversationIndex;
+
+    if (healthy) {
+      return;
+    }
+
+    developer.log(
+      '[SqlCipherDatabase] messages schema unhealthy; rebuilding. '
+      'hasIdPrimaryKey=$hasIdPrimaryKey, hasConversationId=$hasConversationId, '
+      'hasUnexpectedPrimaryKey=$hasUnexpectedPrimaryKey, '
+      'hasUniqueConversationIndex=$hasUniqueConversationIndex',
+      name: 'SqlCipherDatabase',
+    );
+
+    await db.execute('PRAGMA foreign_keys = OFF;');
+    try {
+      await db.transaction((txn) async {
+        await txn.execute('ALTER TABLE messages RENAME TO messages_broken;');
+        await txn.execute('''
+CREATE TABLE messages (
+	id TEXT PRIMARY KEY,
+	conversation_id TEXT NOT NULL,
+	role TEXT NOT NULL,
+	content TEXT NOT NULL,
+	created_at INTEGER NOT NULL,
+	deleted_at INTEGER,
+	parent_message_id TEXT,
+	FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+''');
+        await txn.execute('''
+INSERT INTO messages (
+	id,
+	conversation_id,
+	role,
+	content,
+	created_at,
+	deleted_at,
+	parent_message_id
+)
+SELECT
+	id,
+	conversation_id,
+	role,
+	content,
+	created_at,
+	deleted_at,
+	parent_message_id
+FROM messages_broken;
+''');
+        await txn.execute('DROP TABLE messages_broken;');
+        await txn.execute(
+          'CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at ON messages(conversation_id, created_at);',
+        );
+        await txn.execute(
+          'CREATE INDEX IF NOT EXISTS idx_messages_parent_message_id ON messages(parent_message_id);',
+        );
+      });
+    } finally {
+      await db.execute('PRAGMA foreign_keys = ON;');
+    }
   }
 
   Future<void> close() async {

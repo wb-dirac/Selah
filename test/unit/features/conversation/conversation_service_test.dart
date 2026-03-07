@@ -8,6 +8,7 @@ import 'package:personal_ai_assistant/features/conversation/data/models/attachme
 import 'package:personal_ai_assistant/features/conversation/data/models/conversation_model.dart';
 import 'package:personal_ai_assistant/features/conversation/data/models/message_model.dart';
 import 'package:personal_ai_assistant/features/conversation/domain/conversation_service.dart';
+import 'package:personal_ai_assistant/storage/config/app_preferences_store.dart';
 
 // ---------------------------------------------------------------------------
 // Minimal stubs
@@ -22,6 +23,25 @@ class _NullKeychain implements KeychainService {
 	Future<String?> read({required String key}) async => null;
 	@override
 	Future<void> write({required String key, required String value}) async {}
+}
+
+class _InMemoryPreferencesStore implements AppPreferencesStore {
+	final Map<String, String> _store = {};
+
+	@override
+	Future<void> clearAll() async {
+		_store.clear();
+	}
+
+	@override
+	Future<String?> readString(String key) async {
+		return _store[key];
+	}
+
+	@override
+	Future<void> saveString(String key, String value) async {
+		_store[key] = value;
+	}
 }
 
 SqlCipherDatabase _fakeDb() => SqlCipherDatabase(_NullKeychain());
@@ -67,6 +87,18 @@ class _FakeMessageDao extends MessageDao {
 	}
 
 	@override
+	Future<MessageEntity?> findById(String id) async {
+		for (final messages in _store.values) {
+			for (final message in messages) {
+				if (message.id == id && message.deletedAt == null) {
+					return message;
+				}
+			}
+		}
+		return null;
+	}
+
+	@override
 	Future<List<MessageEntity>> listByConversation(
 		String conversationId, {
 		int page = 0,
@@ -79,6 +111,15 @@ class _FakeMessageDao extends MessageDao {
 		final offset = page * pageSize;
 		if (offset >= all.length) return [];
 		return all.sublist(offset, (offset + pageSize).clamp(0, all.length));
+	}
+
+	@override
+	Future<List<MessageEntity>> listAllByConversation(String conversationId) async {
+		final all = (_store[conversationId] ?? [])
+				.where((m) => m.deletedAt == null)
+				.toList()
+			..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+		return all;
 	}
 }
 
@@ -114,6 +155,7 @@ ConversationService _makeService() {
 		messageDao: _FakeMessageDao(),
 		attachmentDao: _FakeAttachmentDao(),
 		database: _fakeDb(),
+		preferencesStore: _InMemoryPreferencesStore(),
 	);
 }
 
@@ -165,6 +207,26 @@ void main() {
 			final messages = await svc.getMessages(conv.id);
 			expect(messages, isNotEmpty);
 			expect(messages.first.content, equals('Hello'));
+		});
+
+		test('addMessage is readable by getAllMessages', () async {
+			final svc = _makeService();
+			final conv = await svc.getOrCreateActiveConversation();
+			await svc.addMessage(
+				conversationId: conv.id,
+				role: 'user',
+				content: 'A',
+			);
+			await svc.addMessage(
+				conversationId: conv.id,
+				role: 'assistant',
+				content: 'B',
+			);
+
+			final allMessages = await svc.getAllMessages(conv.id);
+			expect(allMessages.length, equals(2));
+			expect(allMessages.first.content, equals('A'));
+			expect(allMessages.last.content, equals('B'));
 		});
 
 		test('updateConversationTitle updates the title', () async {

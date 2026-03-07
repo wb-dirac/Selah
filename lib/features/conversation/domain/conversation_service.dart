@@ -1,3 +1,6 @@
+import 'dart:developer' as developer;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:personal_ai_assistant/core/database/sqlcipher_database.dart';
 import 'package:personal_ai_assistant/features/conversation/data/datasources/attachment_local_datasource.dart';
@@ -6,6 +9,8 @@ import 'package:personal_ai_assistant/features/conversation/data/datasources/mes
 import 'package:personal_ai_assistant/features/conversation/data/models/attachment_model.dart';
 import 'package:personal_ai_assistant/features/conversation/data/models/conversation_model.dart';
 import 'package:personal_ai_assistant/features/conversation/data/models/message_model.dart';
+import 'package:personal_ai_assistant/storage/config/app_preferences_store.dart';
+import 'package:personal_ai_assistant/storage/config/keychain_preferences_store.dart';
 import 'package:uuid/uuid.dart';
 
 class ConversationService {
@@ -14,16 +19,20 @@ class ConversationService {
     required MessageDao messageDao,
     required AttachmentDao attachmentDao,
     required SqlCipherDatabase database,
+    required AppPreferencesStore preferencesStore,
   }) : _conversationDao = conversationDao,
        _messageDao = messageDao,
        _attachmentDao = attachmentDao,
-       _database = database;
+       _database = database,
+       _preferencesStore = preferencesStore;
 
   final ConversationDao _conversationDao;
   final MessageDao _messageDao;
   final AttachmentDao _attachmentDao;
   final SqlCipherDatabase _database;
+  final AppPreferencesStore _preferencesStore;
   static const _uuid = Uuid();
+  static const _activeConversationKey = 'conversation.active.id';
 
   Future<ConversationEntity> createConversation({String? title}) async {
     final now = DateTime.now();
@@ -34,12 +43,22 @@ class ConversationService {
       updatedAt: now,
     );
     await _conversationDao.upsert(entity);
+    await setActiveConversationId(entity.id);
     return entity;
   }
 
   Future<ConversationEntity> getOrCreateActiveConversation() async {
+    final activeConversationId = await getActiveConversationId();
+    if (activeConversationId != null && activeConversationId.isNotEmpty) {
+      final active = await _conversationDao.findById(activeConversationId);
+      if (active != null) {
+        return active;
+      }
+    }
+
     final list = await _conversationDao.list(page: 0, pageSize: 1);
     if (list.isNotEmpty) {
+      await setActiveConversationId(list.first.id);
       return list.first;
     }
     final now = DateTime.now();
@@ -49,11 +68,20 @@ class ConversationService {
       updatedAt: now,
     );
     await _conversationDao.upsert(entity);
+    await setActiveConversationId(entity.id);
     return entity;
   }
 
   Future<ConversationEntity?> getConversationById(String id) {
     return _conversationDao.findById(id);
+  }
+
+  Future<void> setActiveConversationId(String conversationId) {
+    return _preferencesStore.saveString(_activeConversationKey, conversationId);
+  }
+
+  Future<String?> getActiveConversationId() {
+    return _preferencesStore.readString(_activeConversationKey);
   }
 
   Future<List<MessageEntity>> getMessages(
@@ -84,8 +112,19 @@ class ConversationService {
       createdAt: now,
       parentMessageId: parentMessageId,
     );
+
     await _messageDao.upsert(entity);
-    // bump conversation updated_at
+
+    // Verify the write succeeded.
+    final persisted = await _messageDao.findById(entity.id);
+    if (persisted == null) {
+      throw StateError(
+        '消息持久化失败: findById returned null after insert '
+        '(conversationId=$conversationId, role=$role)',
+      );
+    }
+
+    // Bump conversation updated_at so the history list sorts correctly.
     final conv = await _conversationDao.findById(conversationId);
     if (conv != null) {
       await _conversationDao.upsert(
@@ -98,7 +137,17 @@ class ConversationService {
         ),
       );
     }
-    return entity;
+
+    return persisted;
+  }
+
+  void _debugLog(String event, {Map<String, Object?>? context}) {
+    if (kDebugMode) {
+      developer.log(
+        '[ConversationService] $event ${context ?? const {}}',
+        name: 'ConversationService',
+      );
+    }
   }
 
   /// Returns all sibling assistant messages that were generated as responses
@@ -200,5 +249,6 @@ final conversationServiceProvider = Provider<ConversationService>((ref) {
     messageDao: ref.watch(messageDaoProvider),
     attachmentDao: ref.watch(attachmentDaoProvider),
     database: ref.watch(sqlCipherDatabaseProvider),
+    preferencesStore: ref.watch(keychainPreferencesStoreProvider),
   );
 });

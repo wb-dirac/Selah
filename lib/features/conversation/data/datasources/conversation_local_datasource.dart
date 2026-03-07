@@ -8,13 +8,28 @@ class ConversationDao {
 
 	final SqlCipherDatabase _database;
 
+	/// Upserts a conversation row without triggering CASCADE DELETE.
+	///
+	/// Using `INSERT OR REPLACE` (ConflictAlgorithm.replace) physically DELETEs
+	/// the old row before re-inserting, which fires `ON DELETE CASCADE` and wipes
+	/// all messages for that conversation.  Instead, we try an UPDATE first and
+	/// fall back to a plain INSERT for truly new rows.
 	Future<void> upsert(ConversationEntity entity) async {
 		final db = await _database.open();
-		await db.insert(
+		final affected = await db.update(
 			'conversations',
 			entity.toMap(),
-			conflictAlgorithm: ConflictAlgorithm.replace,
+			where: 'id = ?',
+			whereArgs: [entity.id],
 		);
+		if (affected == 0) {
+			// Row does not exist yet — insert it.
+			await db.insert(
+				'conversations',
+				entity.toMap(),
+				conflictAlgorithm: ConflictAlgorithm.ignore,
+			);
+		}
 	}
 
 	Future<ConversationEntity?> findById(String id) async {
