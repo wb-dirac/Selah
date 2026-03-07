@@ -11,6 +11,7 @@ class _FakeChatNotifier extends ChatNotifier {
   Future<ChatState> build() async {
     return ChatState(
       conversationId: 'conv-1',
+      conversationTitle: '周末计划',
       messages: [
         DisplayMessage(
           id: 'assistant-streaming',
@@ -45,6 +46,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
+    expect(find.text('周末计划'), findsOneWidget);
     expect(find.textContaining('已回复一点'), findsOneWidget);
   });
 }

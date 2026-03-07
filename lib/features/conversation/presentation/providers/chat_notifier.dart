@@ -77,6 +77,7 @@ class DisplayMessage {
 class ChatState {
   const ChatState({
     this.conversationId,
+    this.conversationTitle,
     this.messages = const [],
     this.isStreaming = false,
     this.error,
@@ -84,6 +85,7 @@ class ChatState {
   });
 
   final String? conversationId;
+  final String? conversationTitle;
   final List<DisplayMessage> messages;
   final bool isStreaming;
   final String? error;
@@ -95,6 +97,7 @@ class ChatState {
 
   ChatState copyWith({
     String? conversationId,
+    String? conversationTitle,
     List<DisplayMessage>? messages,
     bool? isStreaming,
     String? error,
@@ -103,6 +106,7 @@ class ChatState {
   }) {
     return ChatState(
       conversationId: conversationId ?? this.conversationId,
+      conversationTitle: conversationTitle ?? this.conversationTitle,
       messages: messages ?? this.messages,
       isStreaming: isStreaming ?? this.isStreaming,
       error: clearError ? null : (error ?? this.error),
@@ -160,8 +164,14 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
         (current.isStreaming || current.messages.isNotEmpty);
 
     if (hasLiveState) {
-      if ((current.conversationId ?? '').isEmpty) {
-        state = AsyncData(current.copyWith(conversationId: conversation.id));
+      if ((current.conversationId ?? '').isEmpty ||
+          current.conversationTitle != conversation.title) {
+        state = AsyncData(
+          current.copyWith(
+            conversationId: conversation.id,
+            conversationTitle: conversation.title,
+          ),
+        );
       }
       return;
     }
@@ -169,6 +179,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     state = AsyncData(
       ChatState(
         conversationId: conversation.id,
+        conversationTitle: conversation.title,
         messages: branchState.messages,
         activeBranchIndices: branchState.activeBranchIndices,
       ),
@@ -197,6 +208,15 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       final conv = await service.getOrCreateActiveConversation();
       conversationId = conv.id;
     }
+    await service.setActiveConversationId(conversationId);
+
+    final conversation = await service.getConversationById(conversationId);
+    final hasConversationTitle = (conversation?.title ?? '').trim().isNotEmpty;
+    final existingMessages = await service.getAllMessages(conversationId);
+    final hasStartedConversation = existingMessages.any(
+      (m) => m.role == 'user' || m.role == 'assistant',
+    );
+    final shouldGenerateTitle = !hasConversationTitle && !hasStartedConversation;
 
     final userEntity = await service.addMessage(
       conversationId: conversationId,
@@ -245,6 +265,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     state = AsyncData(
       current.copyWith(
         conversationId: conversationId,
+        conversationTitle: current.conversationTitle ?? conversation?.title,
         messages: [...current.messages, userDisplay],
         isStreaming: true,
         clearError: true,
@@ -275,10 +296,12 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       service: service,
       conversationId: conversationId,
       parentMessageId: userEntity.id,
+      userContent: userContent,
       userImages: chatImages,
       ocrEnrichedContent: effectiveContent != userContent
           ? effectiveContent
           : null,
+      shouldGenerateTitle: shouldGenerateTitle,
     );
   }
 
@@ -319,6 +342,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       service: service,
       conversationId: conversationId,
       parentMessageId: parentId,
+      userContent: '',
     );
   }
 
@@ -348,8 +372,40 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     state = AsyncData(
       ChatState(
         conversationId: conversation.id,
+        conversationTitle: conversation.title,
         messages: const [],
         activeBranchIndices: const {},
+      ),
+    );
+  }
+
+  Future<void> renameConversationTitle(String nextTitle) async {
+    final current = state.value;
+    if (current == null) return;
+
+    final conversationId = current.conversationId ?? '';
+    if (conversationId.isEmpty) {
+      state = AsyncData(current.copyWith(error: '当前会话不存在，无法重命名'));
+      return;
+    }
+
+    final sanitizedTitle = _normalizeConversationTitleWithLimit(
+      nextTitle,
+      maxLength: 80,
+    );
+    if (sanitizedTitle.isEmpty) {
+      state = AsyncData(current.copyWith(error: '标题不能为空'));
+      return;
+    }
+
+    final service = ref.read(conversationServiceProvider);
+    await service.updateConversationTitle(conversationId, sanitizedTitle);
+
+    final refreshed = await service.getConversationById(conversationId);
+    state = AsyncData(
+      current.copyWith(
+        conversationTitle: refreshed?.title ?? sanitizedTitle,
+        clearError: true,
       ),
     );
   }
@@ -377,16 +433,23 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     state = AsyncData(
       ChatState(
         conversationId: conversation.id,
+        conversationTitle: conversation.title,
         messages: branchState.messages,
         activeBranchIndices: branchState.activeBranchIndices,
       ),
     );
+
+    await service.setActiveConversationId(conversation.id);
   }
 
   // ─── Private helpers ─────────────────────────────────────────────
 
   /// Default context window size used when the model does not report one.
   static const _defaultContextWindowTokens = 128000;
+  static final RegExp _titleTagPattern = RegExp(
+    r'^\s*\[TITLE\]\s*(.{1,80}?)\s*\[/TITLE\]\s*',
+    dotAll: true,
+  );
 
   /// Streams an LLM response, saves to DB with [parentMessageId], and
   /// rebuilds the branch-aware display list on completion.
@@ -408,8 +471,10 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     required ConversationService service,
     required String conversationId,
     required String parentMessageId,
+    required String userContent,
     List<ChatImage> userImages = const [],
     String? ocrEnrichedContent,
+    bool shouldGenerateTitle = false,
     int? contextWindowTokens,
   }) async {
     try {
@@ -463,7 +528,15 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
         );
       }
 
-      final effectiveHistory = compressionResult.messages;
+      final effectiveHistory = <ChatMessage>[
+        if (shouldGenerateTitle)
+          const ChatMessage(
+            role: ChatRole.system,
+            content:
+                '你是会话标题助手。请在回复最开头严格输出一行 [TITLE]标题[/TITLE]，标题不超过20个汉字；随后紧接着输出正常回答内容。除这一行外，不要解释标题规则。',
+          ),
+        ...compressionResult.messages,
+      ];
 
       // ── Stream assistant response ────────────────────────────────
       final assistantMsgId = const Uuid().v4();
@@ -485,8 +558,9 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       final buffer = StringBuffer();
       await for (final chunk in gateway.chat(effectiveHistory)) {
         buffer.write(chunk.textDelta);
+        final visibleContent = _stripTitleTagForDisplay(buffer.toString());
         final updated = streamingMsg.copyWith(
-          content: buffer.toString(),
+          content: visibleContent,
           isStreaming: true,
         );
         final msgs = List<DisplayMessage>.from(
@@ -497,11 +571,37 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
         state = AsyncData(state.value!.copyWith(messages: msgs));
       }
 
+      final parsed = _extractTitleAndSanitizeContent(
+        raw: buffer.toString(),
+        fallbackUserContent: userContent,
+      );
+
+      if (shouldGenerateTitle) {
+        final fallbackTitle = _fallbackTitleFromInputs(
+          userInput: userContent,
+          assistantContent: parsed.content,
+        );
+        final resolvedTitle = _normalizeConversationTitleWithLimit(
+          parsed.title ?? fallbackTitle,
+          maxLength: 20,
+        );
+        final appliedTitle = await _updateConversationTitleIfEmpty(
+          service: service,
+          conversationId: conversationId,
+          title: resolvedTitle,
+        );
+        if (appliedTitle != null && state.value != null) {
+          state = AsyncData(
+            state.value!.copyWith(conversationTitle: appliedTitle),
+          );
+        }
+      }
+
       // Persist the completed assistant message with parent link
       final savedAssistant = await service.addMessage(
         conversationId: conversationId,
         role: 'assistant',
-        content: buffer.toString(),
+        content: parsed.content,
         parentMessageId: parentMessageId,
       );
 
@@ -520,7 +620,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
             msgs[idx] = DisplayMessage(
               id: savedAssistant.id,
               role: ChatRole.assistant,
-              content: buffer.toString(),
+              content: parsed.content,
               createdAt: savedAssistant.createdAt,
               isStreaming: false,
               parentMessageId: parentMessageId,
@@ -579,6 +679,99 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
         state.value!.copyWith(isStreaming: false, error: e.toString()),
       );
     }
+  }
+
+  String _stripTitleTagForDisplay(String raw) {
+    final trimmedLeft = raw.trimLeft();
+    if (!trimmedLeft.startsWith('[TITLE]')) {
+      return raw;
+    }
+
+    final end = trimmedLeft.indexOf('[/TITLE]');
+    if (end < 0) {
+      return '';
+    }
+    final contentStart = end + '[/TITLE]'.length;
+    return trimmedLeft.substring(contentStart).trimLeft();
+  }
+
+  _ParsedAssistantReply _extractTitleAndSanitizeContent({
+    required String raw,
+    required String fallbackUserContent,
+  }) {
+    final match = _titleTagPattern.firstMatch(raw);
+    if (match == null) {
+      return _ParsedAssistantReply(content: raw);
+    }
+
+    final extractedTitle = match.group(1)?.trim() ?? '';
+    final normalizedTitle = extractedTitle.isEmpty
+        ? _fallbackTitleFromUserInput(fallbackUserContent)
+        : extractedTitle;
+    final content = raw.replaceFirst(match.group(0)!, '').trimLeft();
+
+    return _ParsedAssistantReply(
+      title: normalizedTitle,
+      content: content,
+    );
+  }
+
+  String _fallbackTitleFromInputs({
+    required String userInput,
+    required String assistantContent,
+  }) {
+    final text = userInput.trim().isNotEmpty
+        ? userInput.trim()
+        : assistantContent.trim();
+    if (text.isEmpty) {
+      return '新对话';
+    }
+
+    final firstLine = text
+        .split('\n')
+        .map((line) => line.trim())
+        .firstWhere((line) => line.isNotEmpty, orElse: () => text);
+    final sanitized = firstLine.replaceAll(RegExp(r'\s+'), ' ');
+    return _normalizeConversationTitleWithLimit(sanitized, maxLength: 20);
+  }
+
+  String _normalizeConversationTitleWithLimit(
+    String rawTitle, {
+    required int maxLength,
+  }) {
+    final compact = rawTitle.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (compact.isEmpty) {
+      return '';
+    }
+
+    if (compact.length <= maxLength) {
+      return compact;
+    }
+
+    return '${compact.substring(0, maxLength)}…';
+  }
+
+  Future<String?> _updateConversationTitleIfEmpty({
+    required ConversationService service,
+    required String conversationId,
+    required String title,
+  }) async {
+    final conversation = await service.getConversationById(conversationId);
+    if (conversation == null) return null;
+    final existingTitle = (conversation.title ?? '').trim();
+    if (existingTitle.isNotEmpty) return existingTitle;
+
+    await service.updateConversationTitle(conversationId, title);
+    return title;
+  }
+
+  String _fallbackTitleFromUserInput(String userInput) {
+    final text = userInput.trim();
+    if (text.isEmpty) {
+      return '新对话';
+    }
+    final compact = text.replaceAll(RegExp(r'\s+'), ' ');
+    return compact.length <= 20 ? compact : '${compact.substring(0, 20)}…';
   }
 
   /// Reloads from DB and rebuilds display with given branch selections.
@@ -715,6 +908,16 @@ class _BranchBuildResult {
 
   final List<DisplayMessage> messages;
   final Map<String, int> activeBranchIndices;
+}
+
+class _ParsedAssistantReply {
+  const _ParsedAssistantReply({
+    this.title,
+    required this.content,
+  });
+
+  final String? title;
+  final String content;
 }
 
 final chatNotifierProvider = AsyncNotifierProvider<ChatNotifier, ChatState>(

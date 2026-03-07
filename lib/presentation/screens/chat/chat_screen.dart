@@ -115,6 +115,54 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     await ref.read(chatNotifierProvider.notifier).startNewConversation();
   }
 
+  Future<void> _renameConversationTitle() async {
+    final currentState = ref.read(chatNotifierProvider).value;
+    if (currentState == null) return;
+
+    final controller = TextEditingController(
+      text: currentState.conversationTitle ?? '',
+    );
+
+    final nextTitle = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('重命名会话'),
+          content: TextField(
+            key: const Key('rename_dialog_text_field'),
+            controller: controller,
+            autofocus: true,
+            maxLength: 80,
+            decoration: const InputDecoration(
+              hintText: '输入会话标题',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(controller.text),
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || nextTitle == null) return;
+    await ref.read(chatNotifierProvider.notifier).renameConversationTitle(nextTitle);
+  }
+
+  String _resolveAppBarTitle(ChatState? state) {
+    final title = state?.conversationTitle?.trim();
+    if (title == null || title.isEmpty) {
+      return '新对话';
+    }
+    return title;
+  }
+
   @override
   Widget build(BuildContext context) {
     final flags = ref.watch(featureFlagServiceProvider);
@@ -148,8 +196,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('对话'),
+        title: Text(_resolveAppBarTitle(chatAsync.value)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            tooltip: '重命名标题',
+            onPressed: _renameConversationTitle,
+          ),
           IconButton(
             icon: const Icon(Icons.add),
             tooltip: '新建会话',
