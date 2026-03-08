@@ -9,7 +9,7 @@ import 'package:sqflite_sqlcipher/sqflite.dart';
 
 const String _databaseName = 'personal_ai_assistant.db';
 const String _databaseSecretKeyName = 'storage.sqlcipher.database_key';
-const int _databaseVersion = 6;
+const int _databaseVersion = 7;
 
 class SqlCipherDatabase {
   SqlCipherDatabase(this._keychainService);
@@ -179,8 +179,18 @@ CREATE TABLE IF NOT EXISTS message_attachments (
           // silently collapse history to one row when using inserts.
           await db.execute('PRAGMA foreign_keys = OFF;');
           await db.transaction((txn) async {
-            await txn.execute('ALTER TABLE messages RENAME TO messages_old;');
-            await txn.execute('''
+            // Check if message_attachments table exists and has foreign key constraints
+            final tableInfo = await txn.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='message_attachments';");
+            final hasAttachmentsTable = tableInfo.isNotEmpty;
+            
+            if (hasAttachmentsTable) {
+              // Drop the foreign key constraint temporarily by dropping and recreating the table
+              final attachmentsData = await txn.rawQuery('SELECT * FROM message_attachments;');
+              await txn.execute('DROP TABLE message_attachments;');
+              
+              // Rebuild messages table
+              await txn.execute('ALTER TABLE messages RENAME TO messages_old;');
+              await txn.execute('''
 CREATE TABLE messages (
 	id TEXT PRIMARY KEY,
 	conversation_id TEXT NOT NULL,
@@ -188,11 +198,11 @@ CREATE TABLE messages (
 	content TEXT NOT NULL,
 	created_at INTEGER NOT NULL,
 	deleted_at INTEGER,
-	parent_message_id TEXT,
+	parent_message_id,
 	FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 ''');
-            await txn.execute('''
+              await txn.execute('''
 INSERT INTO messages (
 	id,
 	conversation_id,
@@ -212,13 +222,115 @@ SELECT
 	parent_message_id
 FROM messages_old;
 ''');
-            await txn.execute('DROP TABLE messages_old;');
+              await txn.execute('DROP TABLE messages_old;');
+              
+              // Recreate message_attachments table
+              await txn.execute('''
+CREATE TABLE message_attachments (
+	id TEXT PRIMARY KEY,
+	message_id TEXT NOT NULL,
+	type TEXT NOT NULL,
+	file_path TEXT NOT NULL,
+	mime_type TEXT,
+	thumbnail_path TEXT,
+	width INTEGER,
+	height INTEGER,
+	size_bytes INTEGER,
+	created_at INTEGER NOT NULL,
+	FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+''');
+              await txn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_message_attachments_message_id ON message_attachments(message_id);',
+              );
+              
+              // Restore attachments data if any
+              if (attachmentsData.isNotEmpty) {
+                for (final row in attachmentsData) {
+                  await txn.insert('message_attachments', row);
+                }
+              }
+            } else {
+              // No attachments table, just rebuild messages
+              await txn.execute('ALTER TABLE messages RENAME TO messages_old;');
+              await txn.execute('''
+CREATE TABLE messages (
+	id TEXT PRIMARY KEY,
+	conversation_id TEXT NOT NULL,
+	role TEXT NOT NULL,
+	content TEXT NOT NULL,
+	created_at INTEGER NOT NULL,
+	deleted_at INTEGER,
+	parent_message_id,
+	FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+''');
+              await txn.execute('''
+INSERT INTO messages (
+	id,
+	conversation_id,
+	role,
+	content,
+	created_at,
+	deleted_at,
+	parent_message_id
+)
+SELECT
+	id,
+	conversation_id,
+	role,
+	content,
+	created_at,
+	deleted_at,
+	parent_message_id
+FROM messages_old;
+''');
+              await txn.execute('DROP TABLE messages_old;');
+            }
+            
             await txn.execute(
               'CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at ON messages(conversation_id, created_at);',
             );
             await txn.execute(
               'CREATE INDEX IF NOT EXISTS idx_messages_parent_message_id ON messages(parent_message_id);',
             );
+          });
+          await db.execute('PRAGMA foreign_keys = ON;');
+        }
+        if (oldVersion < 7) {
+          // Fix any remaining issues with message_attachments table after v6 migration
+          await db.execute('PRAGMA foreign_keys = OFF;');
+          await db.transaction((txn) async {
+            // Check if messages_old table still exists (failed migration)
+            final oldTableInfo = await txn.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='messages_old';");
+            if (oldTableInfo.isNotEmpty) {
+              // Drop the orphaned table and ensure proper schema
+              await txn.execute('DROP TABLE messages_old;');
+            }
+            
+            // Ensure message_attachments table exists and has correct schema
+            final attachmentsTableInfo = await txn.rawQuery("SELECT sql FROM sqlite_master WHERE type='table' AND name='message_attachments';");
+            if (attachmentsTableInfo.isEmpty) {
+              // Recreate the table if it doesn't exist
+              await txn.execute('''
+CREATE TABLE message_attachments (
+	id TEXT PRIMARY KEY,
+	message_id TEXT NOT NULL,
+	type TEXT NOT NULL,
+	file_path TEXT NOT NULL,
+	mime_type TEXT,
+	thumbnail_path TEXT,
+	width INTEGER,
+	height INTEGER,
+	size_bytes INTEGER,
+	created_at INTEGER NOT NULL,
+	FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+''');
+              await txn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_message_attachments_message_id ON message_attachments(message_id);',
+              );
+            }
           });
           await db.execute('PRAGMA foreign_keys = ON;');
         }
