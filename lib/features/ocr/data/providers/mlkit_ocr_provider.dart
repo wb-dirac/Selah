@@ -13,10 +13,19 @@ import 'package:personal_ai_assistant/features/ocr/domain/ocr_service.dart';
 /// All processing is performed on-device with zero network calls.
 class MlKitOcrProvider implements OcrService {
   MlKitOcrProvider({TextRecognizer? recognizer})
-    : _recognizer =
-          recognizer ?? TextRecognizer(script: TextRecognitionScript.chinese);
+    : _recognizer = recognizer ?? _createDefaultRecognizer();
 
   final TextRecognizer _recognizer;
+
+  static TextRecognizer _createDefaultRecognizer() {
+    try {
+      return TextRecognizer();
+    } catch (e) {
+      // If ML Kit fails to initialize, return a dummy recognizer
+      // that will always throw OcrException when used
+      return _DummyTextRecognizer();
+    }
+  }
 
   @override
   Future<OcrResult> recognizeText(String imagePath) async {
@@ -96,10 +105,29 @@ class MlKitOcrProvider implements OcrService {
   }
 }
 
+/// Dummy TextRecognizer used when ML Kit fails to initialize
+class _DummyTextRecognizer implements TextRecognizer {
+  @override
+  String get id => 'dummy';
+
+  @override
+  TextRecognitionScript get script => TextRecognitionScript.latin;
+
+  @override
+  Future<RecognizedText> processImage(InputImage inputImage) async {
+    throw OcrException('ML Kit is not available on this device');
+  }
+
+  @override
+  Future<void> close() async {
+    // No-op
+  }
+}
+
 final mlKitOcrProvider = Provider<MlKitOcrProvider>((ref) {
   final provider = MlKitOcrProvider();
   ref.onDispose(() {
-    unawaited(provider.dispose());
+    provider.dispose(); // Don't wait for disposal
   });
   return provider;
 });
