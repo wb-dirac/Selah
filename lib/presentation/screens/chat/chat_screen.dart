@@ -14,6 +14,7 @@ import 'package:personal_ai_assistant/features/llm_gateway/domain/llm_gateway.da
 import 'package:personal_ai_assistant/features/privacy/data/services/outbound_privacy_guard_service.dart';
 import 'package:personal_ai_assistant/features/privacy/data/services/privacy_preferences_service.dart';
 import 'package:personal_ai_assistant/features/privacy/presentation/widgets/privacy_review_dialogs.dart';
+import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_bridge_executor.dart';
 import 'package:personal_ai_assistant/orchestration/media/file_input_service.dart';
 import 'package:personal_ai_assistant/orchestration/media/image_input_service.dart';
 import 'package:personal_ai_assistant/presentation/screens/widgets/feature_disabled_view.dart';
@@ -363,6 +364,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
               if (state.isStreaming)
                 const LinearProgressIndicator(minHeight: 2),
+              Consumer(
+                builder: (context, ref, _) {
+                  final status =
+                      ref.watch(toolCallStatusProvider);
+                  if (status == null) return const SizedBox.shrink();
+                  return _ToolCallStatusBar(message: status);
+                },
+              ),
               if (_stagedImages.isNotEmpty)
                 _StagedImagesRow(images: _stagedImages, onRemove: _removeImage),
               _InputRow(
@@ -659,6 +668,42 @@ class _StagedImagesRow extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _ToolCallStatusBar extends StatelessWidget {
+  const _ToolCallStatusBar({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: theme.colorScheme.secondaryContainer,
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: theme.colorScheme.onSecondaryContainer,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSecondaryContainer,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
