@@ -21,11 +21,23 @@ class SqlCipherDatabase {
       return _database!;
     }
 
-    // Force delete existing database to ensure clean start
+    try {
+      return await _openDatabase();
+    } catch (e) {
+      // If database version mismatch, delete and recreate
+      if (e.toString().contains('Database version mismatch')) {
+        final databasePath = await getDatabasesPath();
+        final path = '$databasePath/$_databaseName';
+        await deleteDatabase(path);
+        return await _openDatabase();
+      }
+      rethrow;
+    }
+  }
+
+  Future<Database> _openDatabase() async {
     final databasePath = await getDatabasesPath();
     final path = '$databasePath/$_databaseName';
-    await deleteDatabase(path);
-
     final password = await _getOrCreateDatabasePassword();
 
     final database = await openDatabase(
@@ -117,12 +129,12 @@ CREATE TABLE message_attachments (
         );
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        // No migrations - we'll delete and recreate instead
+        // For now, delete and recreate on any version mismatch
+        // This ensures clean schema without complex migrations
         await db.close();
-        final databasePath = await getDatabasesPath();
-        final path = '$databasePath/$_databaseName';
         await deleteDatabase(path);
-        // The next call to open() will trigger onCreate
+        // Return error to trigger recreation with onCreate
+        throw Exception('Database version mismatch, recreating...');
       },
     );
 
