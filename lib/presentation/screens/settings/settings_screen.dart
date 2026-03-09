@@ -55,6 +55,12 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: const Text('VoiceOver / TalkBack / 高对比度 / 字体缩放'),
             onTap: () => context.push('/settings/accessibility'),
           ),
+          ListTile(
+            leading: const Icon(Icons.extension_outlined),
+            title: const Text('Skill 管理'),
+            subtitle: const Text('已安装 Skill 列表 / 启用禁用 / 卸载 / 日志'),
+            onTap: () => context.push('/settings/skills'),
+          ),
           const Divider(height: 1),
           const ListTile(title: Text('Feature Flags')),
           ...flags.entries.map(

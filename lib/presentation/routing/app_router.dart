@@ -9,6 +9,7 @@ import 'package:personal_ai_assistant/presentation/screens/settings/provider_man
 import 'package:personal_ai_assistant/presentation/screens/settings/provider_routing_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/settings/proxy_settings_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/settings/settings_screen.dart';
+import 'package:personal_ai_assistant/presentation/screens/settings/skill_management_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/settings/sync_settings_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/settings/tool_permissions_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/tasks/tasks_screen.dart';
@@ -97,6 +98,11 @@ class AppRouter {
                     path: 'accessibility',
                     name: 'settings-accessibility',
                     builder: (context, state) => const AccessibilitySettingsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'skills',
+                    name: 'settings-skills',
+                    builder: (context, state) => const SkillManagementScreen(),
                   ),
                 ],
               ),

@@ -83,6 +83,11 @@ class SkillRegistryNotifier extends Notifier<SkillRegistryState> {
     _replace(updated);
   }
 
+  void removeSkill(String skillId) {
+    final list = state.skills.where((s) => s.id != skillId).toList();
+    state = state.copyWith(skills: list);
+  }
+
   void _replace(SkillRecord updated) {
     final list = List<SkillRecord>.from(state.skills);
     final idx = list.indexWhere((s) => s.id == updated.id);
