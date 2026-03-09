@@ -8,6 +8,7 @@ import 'package:personal_ai_assistant/features/conversation/presentation/provide
 import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_notifier.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/widgets/branch_switcher.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/widgets/markdown_message_content.dart';
+import 'package:personal_ai_assistant/features/generative_ui/presentation/widgets/generative_ui_message_content.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/chat_message.dart';
 import 'package:personal_ai_assistant/orchestration/media/image_input_service.dart';
 import 'package:personal_ai_assistant/presentation/screens/widgets/feature_disabled_view.dart';
@@ -306,6 +307,9 @@ class _MessageBubble extends ConsumerWidget {
     final isUser = message.role == ChatRole.user;
     final isAssistant = message.role == ChatRole.assistant;
     final theme = Theme.of(context);
+    final generativeUiEnabled = ref
+        .watch(featureFlagServiceProvider)
+        .isEnabled(AppFeatureModule.generativeUi);
 
     final bubble = Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -354,7 +358,9 @@ class _MessageBubble extends ConsumerWidget {
                   message.content,
                   style: TextStyle(color: theme.colorScheme.onPrimary),
                 )
-              : MarkdownMessageContent(content: message.content),
+              : generativeUiEnabled
+                  ? GenerativeUiMessageContent(content: message.content)
+                  : MarkdownMessageContent(content: message.content),
         ],
       ),
     );
