@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:personal_ai_assistant/features/generative_ui/presentation/generative_ui_layout.dart';
 
 abstract class UiComponentData {
   const UiComponentData();
@@ -740,10 +741,13 @@ class UiCardShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
+    final padding = context.uiCardPadding;
+    final maxWidth = context.uiCardMaxWidth;
+
+    final card = Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: padding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -766,6 +770,17 @@ class UiCardShell extends StatelessWidget {
         ),
       ),
     );
+
+    if (maxWidth.isFinite) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: card,
+        ),
+      );
+    }
+    return card;
   }
 }
 
@@ -985,7 +1000,7 @@ class MapPreviewCardWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Container(
-            height: 180,
+            height: context.uiMapPreviewHeight,
             width: double.infinity,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
@@ -1212,7 +1227,7 @@ class PriceChartCardWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           SizedBox(
-            height: 180,
+            height: context.uiChartHeight,
             width: double.infinity,
             child: CustomPaint(
               painter: _PriceChartPainter(
