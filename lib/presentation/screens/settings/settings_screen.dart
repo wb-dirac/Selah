@@ -31,6 +31,30 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: const Text('系统代理（有则使用）/ 自定义 HTTP、SOCKS5'),
             onTap: () => context.push('/settings/proxy'),
           ),
+          ListTile(
+            leading: const Icon(Icons.security_outlined),
+            title: const Text('工具权限管理'),
+            subtitle: const Text('工具授权记录 / 撤销入口 / 调用历史'),
+            onTap: () => context.push('/settings/tool-permissions'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: const Text('隐私与安全'),
+            subtitle: const Text('PII 检测 / 数据保留 / 一键清除'),
+            onTap: () => context.push('/settings/privacy'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.sync_outlined),
+            title: const Text('跨设备同步'),
+            subtitle: const Text('GitHub 授权 / 同步密码 / 同步状态'),
+            onTap: () => context.push('/settings/sync'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.accessibility_new_outlined),
+            title: const Text('无障碍'),
+            subtitle: const Text('VoiceOver / TalkBack / 高对比度 / 字体缩放'),
+            onTap: () => context.push('/settings/accessibility'),
+          ),
           const Divider(height: 1),
           const ListTile(title: Text('Feature Flags')),
           ...flags.entries.map(

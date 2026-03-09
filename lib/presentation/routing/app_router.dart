@@ -3,10 +3,14 @@ import 'package:go_router/go_router.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/screens/conversation_list_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/agent/agent_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/chat/chat_screen.dart';
+import 'package:personal_ai_assistant/presentation/screens/settings/accessibility_settings_screen.dart';
+import 'package:personal_ai_assistant/presentation/screens/settings/privacy_settings_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/settings/provider_management_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/settings/provider_routing_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/settings/proxy_settings_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/settings/settings_screen.dart';
+import 'package:personal_ai_assistant/presentation/screens/settings/sync_settings_screen.dart';
+import 'package:personal_ai_assistant/presentation/screens/settings/tool_permissions_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/tasks/tasks_screen.dart';
 
 class AppRouter {
@@ -73,6 +77,26 @@ class AppRouter {
                     path: 'proxy',
                     name: 'settings-proxy',
                     builder: (context, state) => const ProxySettingsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'tool-permissions',
+                    name: 'settings-tool-permissions',
+                    builder: (context, state) => const ToolPermissionsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'privacy',
+                    name: 'settings-privacy',
+                    builder: (context, state) => const PrivacySettingsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'sync',
+                    name: 'settings-sync',
+                    builder: (context, state) => const SyncSettingsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'accessibility',
+                    name: 'settings-accessibility',
+                    builder: (context, state) => const AccessibilitySettingsScreen(),
                   ),
                 ],
               ),

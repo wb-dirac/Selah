@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:personal_ai_assistant/core/database/sqlcipher_database.dart';
 import 'package:personal_ai_assistant/core/logger/app_logger.dart';
+import 'package:personal_ai_assistant/core/logger/sanitized_logger.dart';
 import 'package:personal_ai_assistant/storage/config/app_preferences_store.dart';
+import 'package:personal_ai_assistant/storage/config/keychain_preferences_store.dart';
 
 class DataRetentionResult {
 	const DataRetentionResult({
@@ -86,8 +88,9 @@ class DataRetentionService {
 }
 
 final dataRetentionServiceProvider = Provider<DataRetentionService>((ref) {
-	throw UnimplementedError(
-		'dataRetentionServiceProvider requires AppPreferencesStore — '
-		'override this provider in the app ProviderScope.',
+	return DataRetentionService(
+		database: ref.watch(sqlCipherDatabaseProvider),
+		preferencesStore: ref.watch(keychainPreferencesStoreProvider),
+		logger: ref.watch(sanitizedLoggerProvider),
 	);
 });

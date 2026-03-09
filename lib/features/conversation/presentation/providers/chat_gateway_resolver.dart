@@ -12,6 +12,18 @@ import 'package:personal_ai_assistant/features/llm_gateway/domain/provider_manag
 import 'package:personal_ai_assistant/features/llm_gateway/domain/routing/model_routing_models.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/domain/routing/routing_settings_service.dart';
 
+class ResolvedChatGateway {
+  const ResolvedChatGateway({
+    required this.gateway,
+    required this.providerLabel,
+    required this.isCloud,
+  });
+
+  final LlmGateway? gateway;
+  final String providerLabel;
+  final bool isCloud;
+}
+
 class ChatGatewayResolver {
   ChatGatewayResolver({
     required ProviderApiKeyStore keyStore,
@@ -31,7 +43,7 @@ class ChatGatewayResolver {
   final SecureHttpClient _secureHttpClient;
   final LocalHttpClient _localHttpClient;
 
-  Future<LlmGateway?> resolveForInput({
+  Future<ResolvedChatGateway> resolveSelectionForInput({
     required String userContent,
     required bool hasImages,
   }) async {
@@ -45,24 +57,47 @@ class ChatGatewayResolver {
         decision.providerId,
       );
       if (target != null) {
-        final routed = await _providerManagementService.buildGatewayFromConfig(
+        final gateway = await _providerManagementService.buildGatewayFromConfig(
           target,
           overrideModelId: decision.modelId,
         );
-        if (routed != null) return routed;
+        if (gateway != null) {
+          return ResolvedChatGateway(
+            gateway: gateway,
+            providerLabel: target.displayName,
+            isCloud: target.type != ManagedProviderType.ollama,
+          );
+        }
       }
     }
 
-    return resolve();
+    return resolveSelection();
   }
 
-  Future<LlmGateway?> resolve() async {
+  Future<LlmGateway?> resolveForInput({
+    required String userContent,
+    required bool hasImages,
+  }) async {
+    final selection = await resolveSelectionForInput(
+      userContent: userContent,
+      hasImages: hasImages,
+    );
+    return selection.gateway;
+  }
+
+  Future<ResolvedChatGateway> resolveSelection() async {
     final selectedConfig = await _providerManagementService.selectedOrFirstEnabled();
     if (selectedConfig != null) {
       final gateway = await _providerManagementService.buildGatewayFromConfig(
         selectedConfig,
       );
-      if (gateway != null) return gateway;
+      if (gateway != null) {
+        return ResolvedChatGateway(
+          gateway: gateway,
+          providerLabel: selectedConfig.displayName,
+          isCloud: selectedConfig.type != ManagedProviderType.ollama,
+        );
+      }
     }
 
     final ollama = await _resolveOllama();
@@ -71,7 +106,16 @@ class ChatGatewayResolver {
     final openAi = await _resolveOpenAiFromEnv();
     if (openAi != null) return openAi;
 
-    return null;
+    return const ResolvedChatGateway(
+      gateway: null,
+      providerLabel: '未配置提供商',
+      isCloud: false,
+    );
+  }
+
+  Future<LlmGateway?> resolve() async {
+    final selection = await resolveSelection();
+    return selection.gateway;
   }
 
   int _estimatePromptTokens(String text) {
@@ -80,7 +124,7 @@ class ChatGatewayResolver {
     return (trimmed.length / 4).ceil();
   }
 
-  Future<LlmGateway?> _resolveOllama() async {
+  Future<ResolvedChatGateway?> _resolveOllama() async {
     const baseUrl = String.fromEnvironment(
       'OLLAMA_BASE_URL',
       defaultValue: 'http://localhost:11434',
@@ -90,9 +134,13 @@ class ChatGatewayResolver {
 
     try {
       if (model != null) {
-        return OllamaProvider(
-          config: OllamaProviderConfig(baseUrl: baseUrl, defaultModel: model),
-          httpClient: _localHttpClient,
+        return ResolvedChatGateway(
+          gateway: OllamaProvider(
+            config: OllamaProviderConfig(baseUrl: baseUrl, defaultModel: model),
+            httpClient: _localHttpClient,
+          ),
+          providerLabel: 'Ollama',
+          isCloud: false,
         );
       }
 
@@ -103,19 +151,23 @@ class ChatGatewayResolver {
       final models = await probe.listModels();
       if (models.isEmpty) return null;
 
-      return OllamaProvider(
-        config: OllamaProviderConfig(
-          baseUrl: baseUrl,
-          defaultModel: models.first.id,
+      return ResolvedChatGateway(
+        gateway: OllamaProvider(
+          config: OllamaProviderConfig(
+            baseUrl: baseUrl,
+            defaultModel: models.first.id,
+          ),
+          httpClient: _localHttpClient,
         ),
-        httpClient: _localHttpClient,
+        providerLabel: 'Ollama',
+        isCloud: false,
       );
     } catch (_) {
       return null;
     }
   }
 
-  Future<LlmGateway?> _resolveOpenAiFromEnv() async {
+  Future<ResolvedChatGateway?> _resolveOpenAiFromEnv() async {
     const apiKey = String.fromEnvironment('OPENAI_API_KEY');
     if (apiKey.trim().isEmpty) return null;
 
@@ -134,14 +186,18 @@ class ChatGatewayResolver {
 
     await _keyStore.save(providerId: providerId, apiKey: apiKey);
 
-    return OpenAiCompatibleProvider(
-      config: OpenAiCompatibleProviderConfig(
-        providerId: providerId,
-        baseUrl: Uri.parse(baseUrlString),
-        defaultModel: model,
+    return ResolvedChatGateway(
+      gateway: OpenAiCompatibleProvider(
+        config: OpenAiCompatibleProviderConfig(
+          providerId: providerId,
+          baseUrl: Uri.parse(baseUrlString),
+          defaultModel: model,
+        ),
+        keyStore: _keyStore,
+        httpClient: _secureHttpClient,
       ),
-      keyStore: _keyStore,
-      httpClient: _secureHttpClient,
+      providerLabel: 'OpenAI Compatible',
+      isCloud: true,
     );
   }
 }
