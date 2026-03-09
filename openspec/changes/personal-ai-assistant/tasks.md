@@ -79,7 +79,7 @@
 ## 7. Agent Skill 沙箱
 
 - [x] 7.1 实现 `SKILL.md` YAML frontmatter 解析器（name / description 校验）
-- [ ] 7.2 实现 Skill 三层加载机制（Level 1/2/3 按需加载）
+- [x] 7.2 实现 Skill 三层加载机制（Level 1/2/3 按需加载）
 - [ ] 7.3 集成 Pyodide WASM，封装 Python 沙箱执行接口（禁网络、禁文件系统）
 - [ ] 7.4 集成 QuickJS VM，封装 JS 沙箱执行接口（无 DOM / 无原生模块）
 - [ ] 7.5 实现 Shell 脚本受限 bash 白名单执行环境
