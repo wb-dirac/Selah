@@ -10,6 +10,9 @@ import 'package:personal_ai_assistant/features/conversation/data/models/conversa
 import 'package:personal_ai_assistant/features/conversation/data/models/message_model.dart';
 import 'package:personal_ai_assistant/features/conversation/domain/conversation_service.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_notifier.dart';
+import 'package:personal_ai_assistant/features/knowledge/data/datasources/document_fragment_dao.dart';
+import 'package:personal_ai_assistant/features/knowledge/domain/knowledge_retrieval_service.dart';
+import 'package:personal_ai_assistant/features/knowledge/domain/text_chunking_service.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/chat_chunk.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/chat_message.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/embedding_vector.dart';
@@ -189,6 +192,51 @@ class _TitleGateway implements LlmGateway {
   Future<List<LlmModelInfo>> listModels() async => const [];
 }
 
+class _CapturingGateway implements LlmGateway {
+  List<ChatMessage> capturedMessages = const <ChatMessage>[];
+
+  @override
+  Stream<ChatChunk> chat(
+    List<ChatMessage> messages, {
+    LlmChatOptions options = const LlmChatOptions(),
+  }) async* {
+    capturedMessages = List<ChatMessage>.from(messages);
+    yield const ChatChunk(textDelta: '已收到上下文');
+    yield const ChatChunk(textDelta: '', isDone: true);
+  }
+
+  @override
+  Future<EmbeddingVector> embed(String text, {String? model}) async {
+    return const EmbeddingVector(values: <double>[1, 0, 0]);
+  }
+
+  @override
+  Future<List<LlmModelInfo>> listModels() async => const <LlmModelInfo>[];
+}
+
+class _FixedKnowledgeRetrievalService extends KnowledgeRetrievalService {
+  _FixedKnowledgeRetrievalService(this.promptContext)
+    : super(
+        documentFragmentDao: _FakeKnowledgeDocumentFragmentDao(),
+        textChunkingService: const TextChunkingService(),
+      );
+
+  final String? promptContext;
+
+  @override
+  Future<String?> buildPromptContext({
+    required String query,
+    required LlmGateway gateway,
+    int topK = 3,
+  }) async {
+    return promptContext;
+  }
+}
+
+class _FakeKnowledgeDocumentFragmentDao extends DocumentFragmentDao {
+  _FakeKnowledgeDocumentFragmentDao() : super(_fakeDb());
+}
+
 void main() {
   test('regression: do not clear messages when DB rebuild returns empty', () async {
     final service = ConversationService(
@@ -303,5 +351,39 @@ void main() {
     final conversation = await service.getConversationById(state.conversationId!);
     expect(conversation, isNotNull);
     expect(conversation!.title, equals('我的差旅计划'));
+  });
+
+  test('injects knowledge prompt context into llm request as system message', () async {
+    final service = ConversationService(
+      conversationDao: _FakeConversationDao(),
+      messageDao: _FakeMessageDao(),
+      attachmentDao: _FakeAttachmentDao(),
+      database: _fakeDb(),
+      preferencesStore: _InMemoryPreferencesStore(),
+    );
+    final gateway = _CapturingGateway();
+
+    final container = ProviderContainer(
+      overrides: [
+        conversationServiceProvider.overrideWithValue(service),
+        knowledgeRetrievalServiceProvider.overrideWithValue(
+          _FixedKnowledgeRetrievalService('以下是相关本地知识片段：北京故宫建议上午预约。'),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(chatNotifierProvider.notifier);
+    await notifier.initialize();
+    await notifier.sendMessage('帮我安排北京两日游', gateway);
+
+    final systemMessages = gateway.capturedMessages
+        .where((message) => message.role == ChatRole.system)
+        .toList(growable: false);
+    expect(systemMessages, isNotEmpty);
+    expect(
+      systemMessages.any((message) => message.content.contains('北京故宫建议上午预约')),
+      isTrue,
+    );
   });
 }

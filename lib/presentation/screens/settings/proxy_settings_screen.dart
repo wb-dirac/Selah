@@ -91,25 +91,27 @@ class _ProxySettingsScreenState extends ConsumerState<ProxySettingsScreen> {
               children: [
                 const Text('远程网络调用优先按此策略走代理。'),
                 const SizedBox(height: 12),
-                RadioListTile<ProxyMode>(
-                  value: ProxyMode.system,
-                  groupValue: _mode,
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    _mode == ProxyMode.system
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                  ),
                   title: const Text('系统代理（有则使用）'),
                   subtitle: const Text('遵循操作系统/运行环境代理设置'),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _mode = value);
-                  },
+                  onTap: () => setState(() => _mode = ProxyMode.system),
                 ),
-                RadioListTile<ProxyMode>(
-                  value: ProxyMode.custom,
-                  groupValue: _mode,
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    _mode == ProxyMode.custom
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                  ),
                   title: const Text('自定义代理'),
                   subtitle: const Text('支持 HTTP、SOCKS5'),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _mode = value);
-                  },
+                  onTap: () => setState(() => _mode = ProxyMode.custom),
                 ),
                 if (_mode == ProxyMode.custom) ...[
                   const SizedBox(height: 8),

@@ -1,6 +1,3 @@
-import 'dart:developer' as developer;
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:personal_ai_assistant/core/database/sqlcipher_database.dart';
 import 'package:personal_ai_assistant/features/conversation/data/datasources/attachment_local_datasource.dart';
@@ -139,15 +136,6 @@ class ConversationService {
     }
 
     return persisted;
-  }
-
-  void _debugLog(String event, {Map<String, Object?>? context}) {
-    if (kDebugMode) {
-      developer.log(
-        '[ConversationService] $event ${context ?? const {}}',
-        name: 'ConversationService',
-      );
-    }
   }
 
   /// Returns all sibling assistant messages that were generated as responses

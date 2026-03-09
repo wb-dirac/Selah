@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:personal_ai_assistant/features/conversation/data/models/attachment_model.dart';
 import 'package:personal_ai_assistant/features/conversation/domain/conversation_service.dart';
+import 'package:personal_ai_assistant/features/knowledge/domain/knowledge_retrieval_service.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/chat_message.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/domain/llm_gateway.dart';
 import 'package:personal_ai_assistant/orchestration/context/context_compressor.dart';
@@ -291,6 +292,13 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       );
     }
 
+    final knowledgePromptContext = await ref
+        .read(knowledgeRetrievalServiceProvider)
+        .buildPromptContext(
+          query: effectiveContent,
+          gateway: gateway,
+        );
+
     await _streamAssistantResponse(
       gateway: gateway,
       service: service,
@@ -298,6 +306,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       parentMessageId: userEntity.id,
       userContent: userContent,
       userImages: chatImages,
+      knowledgePromptContext: knowledgePromptContext,
       ocrEnrichedContent: effectiveContent != userContent
           ? effectiveContent
           : null,
@@ -473,6 +482,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     required String parentMessageId,
     required String userContent,
     List<ChatImage> userImages = const [],
+    String? knowledgePromptContext,
     String? ocrEnrichedContent,
     bool shouldGenerateTitle = false,
     int? contextWindowTokens,
@@ -534,6 +544,11 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
             role: ChatRole.system,
             content:
                 '你是会话标题助手。请在回复最开头严格输出一行 [TITLE]标题[/TITLE]，标题不超过20个汉字；随后紧接着输出正常回答内容。除这一行外，不要解释标题规则。',
+          ),
+        if (knowledgePromptContext != null && knowledgePromptContext.trim().isNotEmpty)
+          ChatMessage(
+            role: ChatRole.system,
+            content: knowledgePromptContext,
           ),
         ...compressionResult.messages,
       ];

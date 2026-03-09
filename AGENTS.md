@@ -1,8 +1,9 @@
 # AGENTS.md
-# 本文件供 Coding Agent 快速了解项目工作规范
+本文件供 Coding Agent 快速了解项目工作规范
 
 ## 关键文档
-- [完整规范索引](CODING_STANDARDS/index.md)
+执行任务时，涉及相关文档必读
+### [完整规范索引](CODING_STANDARDS/index.md)
   1. [1_project_structure.md](CODING_STANDARDS/1_project_structure.md) - Project Structure Standards
   2. [2_general_coding_rules.md](CODING_STANDARDS/2_general_coding_rules.md) - General Coding Rules
   3. [3_flutter_dart_standards.md](CODING_STANDARDS/3_flutter_dart_standards.md) - Flutter / Dart Specific Standards
@@ -19,7 +20,7 @@
   14. [14_cicd_pipeline.md](CODING_STANDARDS/14_cicd_pipeline.md) - Verifiable Mechanisms: CI/CD Pipeline
   15. [15_code_review.md](CODING_STANDARDS/15_code_review.md) - Verifiable Mechanisms: Code Review Protocol
   16. [16_agent_behavior.md](CODING_STANDARDS/16_agent_behavior.md) - Coding Agent Behavior Constraints
-- [产品需求索引](PRD/index.md)
+### [产品需求索引](PRD/index.md)
   1. [1_product_overview.md](PRD/1_product_overview.md) - Product Overview
   2. [2_target_users_scenarios.md](PRD/2_target_users_scenarios.md) - Target Users and Use Cases
   3. [3_product_architecture.md](PRD/3_product_architecture.md) - Product Architecture Overview
@@ -30,7 +31,7 @@
   8. [8_development_roadmap.md](PRD/8_development_roadmap.md) - Development Roadmap
   9. [9_risks_mitigation.md](PRD/9_risks_mitigation.md) - Risks and Mitigation Measures
   10. [10_appendix.md](PRD/10_appendix.md) - Appendix
-- [UI/UX 规范索引](UI/index.md)
+### [UI/UX 规范索引](UI/index.md)
   1. [1_design_language_system.md](1_design_language_system.md) - Design Language and System
   2. [2_navigation_information_architecture.md](2_navigation_information_architecture.md) - Navigation Structure and Information Architecture
   3. [3_main_conversation_interface.md](3_main_conversation_interface.md) - Main Conversation Interface

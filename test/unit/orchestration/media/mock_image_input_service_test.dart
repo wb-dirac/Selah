@@ -2,66 +2,19 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:personal_ai_assistant/orchestration/media/image_input_service.dart';
-
-/// Mock implementation of PathProviderPlatform for testing
-class MockPathProvider extends PathProviderPlatform {
-  @override
-  Future<String?> getApplicationDocumentsPath() async {
-    return Directory.systemTemp.path;
-  }
-
-  @override
-  Future<String?> getTemporaryPath() async {
-    return Directory.systemTemp.path;
-  }
-
-  @override
-  Future<String?> getLibraryPath() async {
-    return Directory.systemTemp.path;
-  }
-
-  @override
-  Future<String?> getApplicationSupportPath() async {
-    return Directory.systemTemp.path;
-  }
-
-  @override
-  Future<String?> getExternalStoragePath() async {
-    return Directory.systemTemp.path;
-  }
-
-  @override
-  Future<List<String>?> getExternalCachePaths() async {
-    return [Directory.systemTemp.path];
-  }
-
-  @override
-  Future<List<String>?> getExternalStoragePaths({
-    StorageDirectory? type,
-  }) async {
-    return [Directory.systemTemp.path];
-  }
-
-  @override
-  Future<List<String>?> getStoragePaths() async {
-    return [Directory.systemTemp.path];
-  }
-}
 
 void main() {
   // Initialize Flutter binding for tests
   TestWidgetsFlutterBinding.ensureInitialized();
-  
-  // Set up mock path provider
-  PathProviderPlatform.instance = MockPathProvider();
 
   group('ImageInputService Mock Tests', () {
     late ImageInputService service;
 
     setUp(() {
-      service = ImageInputService();
+      service = ImageInputService(
+        attachmentDirectoryProvider: () async => Directory.systemTemp,
+      );
     });
 
     group('processDragAndDrop', () {

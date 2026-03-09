@@ -47,10 +47,15 @@ enum ImageInputSource { camera, gallery, clipboard, dragAndDrop }
 /// Images are copied to a private app directory so the original
 /// can safely be deleted without affecting stored attachments.
 class ImageInputService {
-  ImageInputService({ImagePicker? imagePicker})
-    : _picker = imagePicker ?? ImagePicker();
+  ImageInputService({
+    ImagePicker? imagePicker,
+    Future<Directory> Function()? attachmentDirectoryProvider,
+  }) : _picker = imagePicker ?? ImagePicker(),
+       _attachmentDirectoryProvider =
+           attachmentDirectoryProvider ?? getApplicationDocumentsDirectory;
 
   final ImagePicker _picker;
+  final Future<Directory> Function() _attachmentDirectoryProvider;
   static const _uuid = Uuid();
 
   /// Directory name under the app's documents path for attachment storage.
@@ -157,7 +162,7 @@ class ImageInputService {
   }
 
   Future<Directory> _getAttachmentDirectory() async {
-    final appDir = await getApplicationDocumentsDirectory();
+    final appDir = await _attachmentDirectoryProvider();
     final attachDir = Directory(p.join(appDir.path, _attachmentDir));
     if (!await attachDir.exists()) {
       await attachDir.create(recursive: true);
