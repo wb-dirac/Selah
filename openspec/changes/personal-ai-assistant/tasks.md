@@ -93,7 +93,7 @@
 
 ## 8. 后台定时任务引擎
 
-- [ ] 8.1 实现任务定义数据模型（任务类型 / Cron 表达式 / 触发条件 / 关联操作）
+- [x] 8.1 实现任务定义数据模型（任务类型 / Cron 表达式 / 触发条件 / 关联操作）
 - [ ] 8.2 实现 iOS BGTaskScheduler + BGProcessingTask 集成
 - [ ] 8.3 实现 Android WorkManager + AlarmManager 集成
 - [ ] 8.4 实现 macOS / Windows 系统 Cron / Task Scheduler 集成
