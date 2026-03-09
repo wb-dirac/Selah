@@ -51,18 +51,18 @@ void main() {
     });
 
     test('loadLevel1 parses manifest correctly', () async {
-      final dir = _makeSkillDir('my_skill');
+      final dir = _makeSkillDir('my-skill');
 
       final record = await loader.loadLevel1(dir.path);
       expect(record, isNotNull);
-      expect(record!.name, 'my_skill');
+      expect(record!.name, 'my-skill');
       expect(record.level1.manifest.version, '1.0.0');
       expect(record.loadedLevel, SkillLoadLevel.level1);
     });
 
     test('loadLevel2 upgrades to level2 with system prompt', () async {
       final dir = _makeSkillDir(
-        'skill_with_prompt',
+        'skill-with-prompt',
         systemPrompt: 'You are a helpful assistant.',
       );
 
@@ -79,7 +79,7 @@ void main() {
     });
 
     test('loadLevel2 skips upgrade if already at level2', () async {
-      final dir = _makeSkillDir('already_l2');
+      final dir = _makeSkillDir('already-l2');
       final level1Record = await loader.loadLevel1(dir.path);
       final level2Record = await loader.loadLevel2(level1Record!);
 
@@ -93,8 +93,8 @@ void main() {
     });
 
     test('scanDirectory finds all valid skill directories', () async {
-      _makeSkillDir('skill_a');
-      _makeSkillDir('skill_b');
+      _makeSkillDir('skill-a');
+      _makeSkillDir('skill-b');
 
       final root =
           Directory(p.join(Directory.systemTemp.path, 'skills_test'));
@@ -102,13 +102,13 @@ void main() {
 
       expect(records.length, greaterThanOrEqualTo(2));
       final names = records.map((r) => r.name).toList();
-      expect(names, containsAll(<String>['skill_a', 'skill_b']));
+      expect(names, containsAll(<String>['skill-a', 'skill-b']));
     });
   });
 
   group('SkillRecord level progression', () {
     test('starts at level1', () async {
-      final dir = _makeSkillDir('level_test');
+      final dir = _makeSkillDir('level-test');
       final record = await loader.loadLevel1(dir.path);
       expect(record!.loadedLevel, SkillLoadLevel.level1);
       expect(record.level2, isNull);
@@ -116,7 +116,7 @@ void main() {
     });
 
     test('withLevel2 advances load level', () async {
-      final dir = _makeSkillDir('level_test2');
+      final dir = _makeSkillDir('level-test2');
       final record = (await loader.loadLevel1(dir.path))!;
       final upgraded = await loader.loadLevel2(record);
       expect(upgraded!.loadedLevel, SkillLoadLevel.level2);

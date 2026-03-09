@@ -50,7 +50,7 @@ class SkillManifestParser {
       errors.add('缺少必填字段：name');
     } else if (!_isValidName(name)) {
       errors.add(
-        'name 格式无效（只允许字母、数字、下划线、连字符，且不能以连字符开头）',
+        'name 格式无效（只允许小写字母、数字、连字符，2-64 字符，且不能包含保留词 anthropic/claude）',
       );
     }
 
@@ -120,6 +120,9 @@ class SkillManifestParser {
   }
 
   bool _isValidName(String name) {
-    return RegExp(r'^[a-zA-Z0-9_][a-zA-Z0-9_\-]*$').hasMatch(name);
+    if (name.length < 2 || name.length > 64) return false;
+    if (!RegExp(r'^[a-z0-9][a-z0-9\-]*[a-z0-9]$').hasMatch(name)) return false;
+    if (name.contains('anthropic') || name.contains('claude')) return false;
+    return true;
   }
 }

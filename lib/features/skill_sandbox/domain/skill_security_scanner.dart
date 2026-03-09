@@ -41,10 +41,22 @@ class SkillSecurityScanner {
 
   static final List<_PythonPattern> _pythonPatterns = [
     _PythonPattern(
+      pattern: RegExp(r'\bimport\s+os\b', multiLine: true),
+      severity: ScanSeverity.critical,
+      category: ScanCategory.processExecution,
+      message: '检测到 import os，Skill 沙箱禁止文件系统/进程访问',
+    ),
+    _PythonPattern(
       pattern: RegExp(r'\bos\.system\s*\(', multiLine: true),
       severity: ScanSeverity.critical,
       category: ScanCategory.processExecution,
       message: '检测到 os.system() 调用，可能执行任意系统命令',
+    ),
+    _PythonPattern(
+      pattern: RegExp(r'\bimport\s+subprocess\b', multiLine: true),
+      severity: ScanSeverity.critical,
+      category: ScanCategory.processExecution,
+      message: '检测到 import subprocess，Skill 沙箱禁止执行子进程',
     ),
     _PythonPattern(
       pattern: RegExp(r'\bsubprocess\.', multiLine: true),
@@ -71,34 +83,58 @@ class SkillSecurityScanner {
       message: '检测到 eval() 调用，可能执行动态代码',
     ),
     _PythonPattern(
+      pattern: RegExp(r'\bcompile\s*\(', multiLine: true),
+      severity: ScanSeverity.critical,
+      category: ScanCategory.processExecution,
+      message: '检测到 compile() 调用，可能执行动态代码',
+    ),
+    _PythonPattern(
+      pattern: RegExp(r'\bimport\s+socket\b', multiLine: true),
+      severity: ScanSeverity.critical,
+      category: ScanCategory.networkAccess,
+      message: '检测到 import socket，Skill 沙箱禁止网络访问',
+    ),
+    _PythonPattern(
       pattern: RegExp(r'\bsocket\.', multiLine: true),
       severity: ScanSeverity.critical,
       category: ScanCategory.networkAccess,
       message: '检测到 socket 模块使用，Skill 沙箱禁止网络访问',
     ),
     _PythonPattern(
+      pattern: RegExp(r'\bimport\s+urllib\b', multiLine: true),
+      severity: ScanSeverity.critical,
+      category: ScanCategory.networkAccess,
+      message: '检测到 import urllib，Skill 沙箱禁止网络访问',
+    ),
+    _PythonPattern(
       pattern: RegExp(r'\burllib\b', multiLine: true),
       severity: ScanSeverity.critical,
       category: ScanCategory.networkAccess,
-      message: '检测到 urllib 模块导入，Skill 沙箱禁止网络访问',
+      message: '检测到 urllib 模块使用，Skill 沙箱禁止网络访问',
     ),
     _PythonPattern(
       pattern: RegExp(r'\brequests\b', multiLine: true),
       severity: ScanSeverity.critical,
       category: ScanCategory.networkAccess,
-      message: '检测到 requests 模块导入，Skill 沙箱禁止网络访问',
+      message: '检测到 requests 模块，Skill 沙箱禁止网络访问',
     ),
     _PythonPattern(
       pattern: RegExp(r'\bhttpx\b', multiLine: true),
       severity: ScanSeverity.critical,
       category: ScanCategory.networkAccess,
-      message: '检测到 httpx 模块导入，Skill 沙箱禁止网络访问',
+      message: '检测到 httpx 模块，Skill 沙箱禁止网络访问',
     ),
     _PythonPattern(
       pattern: RegExp(r'\bopen\s*\(', multiLine: true),
       severity: ScanSeverity.warning,
       category: ScanCategory.fileSystem,
       message: '检测到 open() 调用，Skill 沙箱应限制文件系统访问',
+    ),
+    _PythonPattern(
+      pattern: RegExp(r'\bimport\s+shutil\b', multiLine: true),
+      severity: ScanSeverity.warning,
+      category: ScanCategory.fileSystem,
+      message: '检测到 import shutil，可能执行文件系统操作',
     ),
     _PythonPattern(
       pattern: RegExp(r'\bshutil\b', multiLine: true),
@@ -117,6 +153,33 @@ class SkillSecurityScanner {
       severity: ScanSeverity.critical,
       category: ScanCategory.processExecution,
       message: '检测到 importlib 动态导入，可能绕过安全限制',
+    ),
+  ];
+
+  static final List<_ShellPattern> _shellPatterns = [
+    _ShellPattern(
+      pattern: RegExp(r'\bcurl\s+', multiLine: true),
+      message: '检测到 curl 命令，可能执行网络请求',
+    ),
+    _ShellPattern(
+      pattern: RegExp(r'\bwget\s+', multiLine: true),
+      message: '检测到 wget 命令，可能执行网络请求',
+    ),
+    _ShellPattern(
+      pattern: RegExp(r'\bnc\s+', multiLine: true),
+      message: '检测到 nc（netcat）命令，可能建立网络连接',
+    ),
+    _ShellPattern(
+      pattern: RegExp(r'\brm\s+-rf', multiLine: true),
+      message: '检测到 rm -rf 命令，可能删除文件',
+    ),
+    _ShellPattern(
+      pattern: RegExp(r'\bchmod\s+', multiLine: true),
+      message: '检测到 chmod 命令，可能修改文件权限',
+    ),
+    _ShellPattern(
+      pattern: RegExp(r'\$\(.*\)', multiLine: true),
+      message: '检测到命令替换 \$(...)，可能执行任意命令',
     ),
   ];
 
@@ -169,7 +232,37 @@ class SkillSecurityScanner {
       ),
       message: '检测到模型特殊 token，可能试图操控对话结构',
     ),
+    _InjectionPattern(
+      pattern: RegExp(r'你现在是', caseSensitive: false),
+      message: '检测到中文角色覆盖指令：「你现在是」',
+    ),
+    _InjectionPattern(
+      pattern: RegExp(r'忘记.{0,20}指令', caseSensitive: false),
+      message: '检测到中文指令覆盖尝试',
+    ),
   ];
+
+  ScanResult scanShellCode(String source) {
+    final findings = <ScanFinding>[];
+    final lines = source.split('\n');
+
+    for (final entry in _shellPatterns) {
+      final matches = entry.pattern.allMatches(source);
+      for (final match in matches) {
+        final lineNum = _lineOf(source, match.start);
+        final snippet = lines[lineNum - 1].trim();
+        findings.add(ScanFinding(
+          severity: ScanSeverity.critical,
+          category: ScanCategory.processExecution,
+          message: entry.message,
+          lineNumber: lineNum,
+          snippet: snippet,
+        ));
+      }
+    }
+
+    return ScanResult(findings: findings);
+  }
 
   ScanResult scanPythonCode(String source) {
     final findings = <ScanFinding>[];
@@ -218,11 +311,17 @@ class SkillSecurityScanner {
   ScanResult scanSkillDirectory({
     required Map<String, String> pythonFiles,
     required Map<String, String> promptFiles,
+    Map<String, String> shellFiles = const <String, String>{},
   }) {
     final allFindings = <ScanFinding>[];
 
     for (final entry in pythonFiles.entries) {
       final result = scanPythonCode(entry.value);
+      allFindings.addAll(result.findings);
+    }
+
+    for (final entry in shellFiles.entries) {
+      final result = scanShellCode(entry.value);
       allFindings.addAll(result.findings);
     }
 
@@ -259,6 +358,13 @@ class _PythonPattern {
 
 class _InjectionPattern {
   const _InjectionPattern({required this.pattern, required this.message});
+
+  final RegExp pattern;
+  final String message;
+}
+
+class _ShellPattern {
+  const _ShellPattern({required this.pattern, required this.message});
 
   final RegExp pattern;
   final String message;

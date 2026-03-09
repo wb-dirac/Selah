@@ -8,7 +8,7 @@ void main() {
     test('parses valid frontmatter with name and description', () {
       const content = '''
 ---
-name: my_skill
+name: my-skill
 description: A useful skill that does things
 version: 1.0.0
 author: Alice
@@ -17,7 +17,7 @@ author: Alice
 ''';
       final result = parser.parse(content);
       expect(result.isSuccess, isTrue);
-      expect(result.manifest!.name, 'my_skill');
+      expect(result.manifest!.name, 'my-skill');
       expect(result.manifest!.description, 'A useful skill that does things');
       expect(result.manifest!.version, '1.0.0');
       expect(result.manifest!.author, 'Alice');
@@ -57,7 +57,7 @@ description: A valid description here
     test('fails when description is missing', () {
       const content = '''
 ---
-name: my_skill
+name: my-skill
 ---
 ''';
       final result = parser.parse(content);
@@ -68,7 +68,7 @@ name: my_skill
     test('fails when description is too short', () {
       const content = '''
 ---
-name: my_skill
+name: my-skill
 description: hi
 ---
 ''';
@@ -104,7 +104,7 @@ description:
     test('stores extra unknown fields in extra map', () {
       const content = '''
 ---
-name: my_skill
+name: my-skill
 description: A valid description here
 license: MIT
 homepage: https://example.com
@@ -116,7 +116,7 @@ homepage: https://example.com
       expect(result.manifest!.extra['homepage'], 'https://example.com');
     });
 
-    test('name can contain hyphens but not leading hyphen', () {
+    test('name allows hyphens, rejects underscores and leading hyphen', () {
       const valid = '''
 ---
 name: my-cool-skill
@@ -132,6 +132,14 @@ description: A valid description here
 ---
 ''';
       expect(parser.parse(invalid).isSuccess, isFalse);
+
+      const withUnderscore = '''
+---
+name: my_skill
+description: A valid description here
+---
+''';
+      expect(parser.parse(withUnderscore).isSuccess, isFalse);
     });
   });
 }

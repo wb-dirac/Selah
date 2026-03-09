@@ -51,6 +51,7 @@ dependencies:
   sqflite_sqlcipher: ^3.4.0
   super_clipboard: ^0.8.0
   syncfusion_flutter_pdf: ^28.1.33
+  url_launcher: ^6.3.1
   uuid: ^4.5.1
   xml: ^6.5.0
 
