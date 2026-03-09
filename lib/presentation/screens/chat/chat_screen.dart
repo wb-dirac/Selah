@@ -10,6 +10,9 @@ import 'package:personal_ai_assistant/features/conversation/presentation/widgets
 import 'package:personal_ai_assistant/features/conversation/presentation/widgets/markdown_message_content.dart';
 import 'package:personal_ai_assistant/features/generative_ui/presentation/widgets/generative_ui_message_content.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/chat_message.dart';
+import 'package:personal_ai_assistant/features/privacy/data/services/outbound_privacy_guard_service.dart';
+import 'package:personal_ai_assistant/features/privacy/data/services/privacy_preferences_service.dart';
+import 'package:personal_ai_assistant/features/privacy/presentation/widgets/privacy_review_dialogs.dart';
 import 'package:personal_ai_assistant/orchestration/media/image_input_service.dart';
 import 'package:personal_ai_assistant/presentation/screens/widgets/feature_disabled_view.dart';
 
@@ -43,6 +46,70 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
     if (text.isEmpty && _stagedImages.isEmpty) return;
+
+    final resolver = ref.read(chatGatewayResolverProvider);
+    final selection = await resolver.resolveSelectionForInput(
+      userContent: text,
+      hasImages: _stagedImages.isNotEmpty,
+    );
+    final privacyPreferences = await ref
+        .read(privacyPreferencesServiceProvider)
+        .load();
+    final conversationId = ref.read(chatNotifierProvider).value?.conversationId;
+
+    if (!mounted) {
+      return;
+    }
+
+    if (_stagedImages.isNotEmpty &&
+        selection.isCloud &&
+        privacyPreferences.imageCloudConfirmationEnabled) {
+      final confirmed = await showImageCloudPrivacyDialog(
+        context: context,
+        providerLabel: selection.providerLabel,
+        imageCount: _stagedImages.length,
+      );
+      if (!confirmed || !mounted) {
+        return;
+      }
+    }
+
+    final review = await ref.read(outboundPrivacyGuardServiceProvider).review(
+      conversationId: conversationId,
+      originalText: text,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    final requiresReview = privacyPreferences.sendBeforeConfirmEnabled ||
+        (selection.isCloud && review.hasSensitiveData);
+
+    var outboundText = text;
+    if (requiresReview) {
+      final decision = await showOutboundPrivacyReviewDialog(
+        context: context,
+        providerLabel: selection.providerLabel,
+        isCloudProvider: selection.isCloud,
+        review: review,
+      );
+      switch (decision) {
+        case OutboundPrivacyDecision.cancel:
+          return;
+        case OutboundPrivacyDecision.sendOriginal:
+          outboundText = text;
+          break;
+        case OutboundPrivacyDecision.sendSanitized:
+          outboundText = review.sanitizedText;
+          break;
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
     _textController.clear();
 
     final images = List<PickedImage>.from(_stagedImages);
@@ -50,12 +117,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _stagedImages.clear();
     });
 
-    final gateway = await ref
-      .read(chatGatewayResolverProvider)
-      .resolveForInput(userContent: text, hasImages: images.isNotEmpty);
     await ref
         .read(chatNotifierProvider.notifier)
-      .sendMessage(text, gateway, images: images);
+      .sendMessage(outboundText, selection.gateway, images: images);
   }
 
   Future<void> _pickImage(ImageInputSource source) async {
@@ -201,7 +265,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
-            tooltip: '重命名标题',
+            tooltip: '重命名会话标题',
             onPressed: _renameConversationTitle,
           ),
           IconButton(
@@ -211,7 +275,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.history),
-            tooltip: '对话历史',
+            tooltip: '查看对话历史',
             onPressed: () => context.push('/chat/history'),
           ),
         ],
@@ -460,6 +524,7 @@ class _InputRow extends StatelessWidget {
           children: [
             IconButton(
               icon: const Icon(Icons.add_photo_alternate),
+              tooltip: '展开多模态工具',
               onPressed: isStreaming ? null : onAttach,
             ),
             Expanded(
@@ -493,6 +558,7 @@ class _InputRow extends StatelessWidget {
                 return IconButton.filled(
                   key: const ValueKey('chat_send_button'),
                   icon: const Icon(Icons.send),
+                  tooltip: '发送消息',
                   onPressed: canSend ? onSend : null,
                 );
               },
@@ -539,10 +605,14 @@ class _StagedImagesRow extends StatelessWidget {
                   right: 4,
                   child: GestureDetector(
                     onTap: () => onRemove(index),
-                    child: const CircleAvatar(
-                      radius: 10,
-                      backgroundColor: Colors.black54,
-                      child: Icon(Icons.close, size: 14, color: Colors.white),
+                    child: Semantics(
+                      label: '移除已选择图片',
+                      button: true,
+                      child: const CircleAvatar(
+                        radius: 10,
+                        backgroundColor: Colors.black54,
+                        child: Icon(Icons.close, size: 14, color: Colors.white),
+                      ),
                     ),
                   ),
                 ),
