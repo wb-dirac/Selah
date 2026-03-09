@@ -70,7 +70,7 @@ abstract final class MapSchemes {
 
   static Uri google({required double lat, required double lng, String? name}) {
     return Uri.parse(
-      'geo:$lat,$lng?q=$lat,${lng}(${Uri.encodeComponent(name ?? 'location')})',
+      'geo:$lat,$lng?q=$lat,$lng(${Uri.encodeComponent(name ?? 'location')})',
     );
   }
 

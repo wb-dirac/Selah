@@ -86,7 +86,7 @@
 - [ ] 7.6 实现沙箱资源限制（30s 超时 / 128MB 内存 / 100MB 临时文件）
 - [x] 7.7 实现 Skill 安装 AST 静态扫描（Python os.system/subprocess/socket 检测）
 - [x] 7.8 实现 Skill 安装 prompt injection 特征检测
-- [ ] 7.9 实现 Skill 安装流程 UI（下载 → 解压 → 扫描 → 确认 → 安装）
+- [x] 7.9 实现 Skill 安装流程 UI（下载 → 解压 → 扫描 → 确认 → 安装）
 - [ ] 7.10 实现 Skill 市场对接（Anthropic 目录 + GitHub 社区索引 + 自定义源）
 - [ ] 7.11 实现 Skill 管理界面（列表、详情、启用/禁用/卸载、运行日志）
 - [ ] 7.12 实现 UIComponentRegistry 的 Skill 扩展注册 API
