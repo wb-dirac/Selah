@@ -10,9 +10,11 @@ import 'package:personal_ai_assistant/features/conversation/presentation/widgets
 import 'package:personal_ai_assistant/features/conversation/presentation/widgets/markdown_message_content.dart';
 import 'package:personal_ai_assistant/features/generative_ui/presentation/widgets/generative_ui_message_content.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/chat_message.dart';
+import 'package:personal_ai_assistant/features/llm_gateway/domain/llm_gateway.dart';
 import 'package:personal_ai_assistant/features/privacy/data/services/outbound_privacy_guard_service.dart';
 import 'package:personal_ai_assistant/features/privacy/data/services/privacy_preferences_service.dart';
 import 'package:personal_ai_assistant/features/privacy/presentation/widgets/privacy_review_dialogs.dart';
+import 'package:personal_ai_assistant/orchestration/media/file_input_service.dart';
 import 'package:personal_ai_assistant/orchestration/media/image_input_service.dart';
 import 'package:personal_ai_assistant/presentation/screens/widgets/feature_disabled_view.dart';
 
@@ -160,7 +162,44 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 _pickImage(ImageInputSource.gallery);
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.attach_file),
+              title: const Text('文件（PDF / Word / Excel / TXT / CSV / Markdown）'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickDocument();
+              },
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDocument() async {
+    final service = ref.read(fileInputServiceProvider);
+    final resolver = ref.read(chatGatewayResolverProvider);
+    LlmGateway? gateway;
+    try {
+      gateway = await resolver.resolve();
+    } catch (_) {
+      gateway = null;
+    }
+    PickedDocument? doc;
+    try {
+      doc = await service.pickAndIndex(gateway);
+    } on FileTooLargeException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('文件过大：$e')),
+      );
+      return;
+    }
+    if (doc == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '「${doc.name}」已导入，共索引 ${doc.indexedChunkCount} 个片段',
         ),
       ),
     );

@@ -40,7 +40,7 @@
 - [x] 4.7 集成本地 OCR（Apple Vision / Google ML Kit）
 - [x] 4.8 实现发送图片至云端 LLM 前的隐私确认弹窗
 - [ ] 4.9 实现文件输入（PDF / Word / Excel / TXT / CSV / Markdown 解析）
-- [ ] 4.10 实现超长文档 RAG 分块索引与检索（sqlite-vec）
+- [x] 4.10 实现超长文档 RAG 分块索引与检索（sqlite-vec）
 - [ ] 4.11 集成 Whisper.cpp（本地 STT）+ Silero VAD（语音活动检测）
 - [ ] 4.12 集成 Kokoro / Piper（本地 TTS），实现流式句子级合成播放
 - [ ] 4.13 实现实时全双工语音模式（Google Live API 接入）
