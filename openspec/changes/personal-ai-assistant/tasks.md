@@ -106,7 +106,7 @@
 
 ## 9. A2A 协议
 
-- [ ] 9.1 实现 Agent Card 数据结构及 `/.well-known/agent.json` 端点
+- [x] 9.1 实现 Agent Card 数据结构及 `/.well-known/agent.json` 端点
 - [ ] 9.2 实现 A2A Host 客户端（HTTP/2 + gRPC，流式请求）
 - [ ] 9.3 实现 A2A Remote Agent 服务端（可选开启，含认证）
 - [ ] 9.4 实现 OAuth 2.0 和 API Key 两种 Agent 认证方式
