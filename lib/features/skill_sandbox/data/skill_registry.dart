@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:personal_ai_assistant/features/skill_sandbox/data/skill_sandbox_factory.dart';
 import 'package:personal_ai_assistant/features/skill_sandbox/domain/skill_loader.dart';
 import 'package:personal_ai_assistant/features/skill_sandbox/domain/skill_record.dart';
 
@@ -66,6 +67,31 @@ class SkillRegistryNotifier extends Notifier<SkillRegistryState> {
 
     final upgraded = await _loader.loadLevel3(current);
     if (upgraded == null) return;
+
+    final level3 = upgraded.level3;
+    if (level3 != null) {
+      final hasExecutableScripts = level3.executableAssets.keys.any(
+        (filename) => SkillSandboxFactory.canHandle(filename),
+      );
+      if (hasExecutableScripts && !level3.isRuntimeReady) {
+        final updatedLevel3 = SkillLevel3(
+          id: level3.id,
+          manifest: level3.manifest,
+          rootPath: level3.rootPath,
+          enabled: level3.enabled,
+          toolDefinitions: level3.toolDefinitions,
+          systemPromptTemplate: level3.systemPromptTemplate,
+          readmeContent: level3.readmeContent,
+          executableAssets: level3.executableAssets,
+          isRuntimeReady: true,
+        );
+        final runtimeReadyRecord =
+            SkillRecord(level1: updatedLevel3).withLevel3(updatedLevel3);
+        _replace(runtimeReadyRecord);
+        return;
+      }
+    }
+
     _replace(upgraded);
   }
 

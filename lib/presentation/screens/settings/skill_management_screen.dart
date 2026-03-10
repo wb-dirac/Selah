@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:personal_ai_assistant/features/skill_sandbox/data/skill_registry.dart';
 import 'package:personal_ai_assistant/features/skill_sandbox/domain/skill_record.dart';
+import 'package:personal_ai_assistant/features/skill_sandbox/presentation/screens/skill_marketplace_screen.dart';
 
 class SkillManagementScreen extends ConsumerWidget {
   const SkillManagementScreen({super.key});
@@ -16,7 +17,7 @@ class SkillManagementScreen extends ConsumerWidget {
         title: const Text('Skill 管理'),
         actions: <Widget>[
           TextButton.icon(
-            onPressed: () => _showComingSoon(context, 'Skill 市场'),
+            onPressed: () => _openMarketplace(context),
             icon: const Icon(Icons.storefront_outlined, size: 18),
             label: const Text('市场'),
           ),
@@ -24,15 +25,18 @@ class SkillManagementScreen extends ConsumerWidget {
       ),
       body: installed.isEmpty
           ? _EmptyState(
-              onBrowse: () => _showComingSoon(context, 'Skill 市场'),
+              onBrowse: () => _openMarketplace(context),
             )
           : _SkillList(skills: installed),
     );
   }
 
-  void _showComingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature 即将上线')),
+  void _openMarketplace(BuildContext context) {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => const SkillMarketplaceScreen(),
+      ),
     );
   }
 }

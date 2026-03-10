@@ -80,14 +80,14 @@
 
 - [x] 7.1 实现 `SKILL.md` YAML frontmatter 解析器（name / description 校验）
 - [x] 7.2 实现 Skill 三层加载机制（Level 1/2/3 按需加载）
-- [ ] 7.3 集成 Pyodide WASM，封装 Python 沙箱执行接口（禁网络、禁文件系统）
-- [ ] 7.4 集成 QuickJS VM，封装 JS 沙箱执行接口（无 DOM / 无原生模块）
-- [ ] 7.5 实现 Shell 脚本受限 bash 白名单执行环境
-- [ ] 7.6 实现沙箱资源限制（30s 超时 / 128MB 内存 / 100MB 临时文件）
+- [x] 7.3 集成 Pyodide WASM，封装 Python 沙箱执行接口（禁网络、禁文件系统）
+- [x] 7.4 集成 QuickJS VM，封装 JS 沙箱执行接口（无 DOM / 无原生模块）
+- [x] 7.5 实现 Shell 脚本受限 bash 白名单执行环境
+- [x] 7.6 实现沙箱资源限制（30s 超时 / 128MB 内存 / 100MB 临时文件）
 - [x] 7.7 实现 Skill 安装 AST 静态扫描（Python os.system/subprocess/socket 检测）
 - [x] 7.8 实现 Skill 安装 prompt injection 特征检测
 - [x] 7.9 实现 Skill 安装流程 UI（下载 → 解压 → 扫描 → 确认 → 安装）
-- [ ] 7.10 实现 Skill 市场对接（Anthropic 目录 + GitHub 社区索引 + 自定义源）
+- [x] 7.10 实现 Skill 市场对接（Anthropic 目录 + GitHub 社区索引 + 自定义源）
 - [x] 7.11 实现 Skill 管理界面（列表、详情、启用/禁用/卸载、运行日志）
 - [x] 7.12 实现 UIComponentRegistry 的 Skill 扩展注册 API
 
