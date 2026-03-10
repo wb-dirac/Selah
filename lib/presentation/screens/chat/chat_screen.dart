@@ -123,7 +123,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     await ref
         .read(chatNotifierProvider.notifier)
-      .sendMessage(outboundText, selection.gateway, images: images);
+      .sendMessage(outboundText, selection.gateway, images: images, buildContext: context);
   }
 
   Future<void> _pickImage(ImageInputSource source) async {

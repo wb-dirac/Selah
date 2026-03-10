@@ -1,11 +1,17 @@
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:personal_ai_assistant/features/conversation/data/models/attachment_model.dart';
 import 'package:personal_ai_assistant/features/conversation/domain/conversation_service.dart';
 import 'package:personal_ai_assistant/features/knowledge/domain/knowledge_retrieval_service.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/chat_message.dart';
+import 'package:personal_ai_assistant/features/llm_gateway/data/models/llm_chat_options.dart';
+import 'package:personal_ai_assistant/features/llm_gateway/data/models/tool_spec.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/domain/llm_gateway.dart';
+import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_bridge_executor.dart';
+import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_call_result.dart';
+import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_spec_converter.dart';
 import 'package:personal_ai_assistant/orchestration/context/context_compressor.dart';
 import 'package:personal_ai_assistant/orchestration/media/image_input_service.dart';
 import 'package:personal_ai_assistant/orchestration/media/ocr_orchestration_service.dart';
@@ -193,10 +199,14 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
   ///
   /// If [images] is provided, each image is saved as an [AttachmentEntity]
   /// and the image bytes are included in the LLM request for vision models.
+  ///
+  /// Pass [buildContext] so tool-call confirmation dialogs can be shown when
+  /// the LLM requests tool invocations that require explicit user approval.
   Future<void> sendMessage(
     String userContent,
     LlmGateway? gateway, {
     List<PickedImage> images = const [],
+    BuildContext? buildContext,
   }) async {
     final current = state.value;
     if (current == null) return;
@@ -311,6 +321,8 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
           ? effectiveContent
           : null,
       shouldGenerateTitle: shouldGenerateTitle,
+      // ignore: use_build_context_synchronously
+      buildContext: buildContext,
     );
   }
 
@@ -318,8 +330,9 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
   /// Creates a new branch sibling under the same [parentMessageId].
   Future<void> regenerateMessage(
     String assistantMessageId,
-    LlmGateway? gateway,
-  ) async {
+    LlmGateway? gateway, {
+    BuildContext? buildContext,
+  }) async {
     final current = state.value;
     if (current == null) return;
     if (current.isStreaming) return; // don't regenerate while streaming
@@ -352,6 +365,8 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       conversationId: conversationId,
       parentMessageId: parentId,
       userContent: '',
+      // ignore: use_build_context_synchronously
+      buildContext: buildContext,
     );
   }
 
@@ -455,6 +470,10 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
 
   /// Default context window size used when the model does not report one.
   static const _defaultContextWindowTokens = 128000;
+
+  /// Maximum tool-call iterations per assistant turn to prevent infinite loops.
+  static const _maxToolCallIterations = 10;
+
   static final RegExp _titleTagPattern = RegExp(
     r'^\s*\[TITLE\]\s*(.{1,80}?)\s*\[/TITLE\]\s*',
     dotAll: true,
@@ -475,6 +494,11 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
   /// last user message in the LLM history so OCR-extracted text is included
   /// in the context sent to the model. The display message retains the
   /// original user text (OCR text is invisible to the user in the chat UI).
+  ///
+  /// Supports an agentic tool-call loop: if the LLM returns tool call
+  /// requests, the appropriate tool is executed via [ToolBridgeExecutor]
+  /// and the result is fed back to the LLM, repeating up to
+  /// [_maxToolCallIterations] times.
   Future<void> _streamAssistantResponse({
     required LlmGateway gateway,
     required ConversationService service,
@@ -486,6 +510,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     String? ocrEnrichedContent,
     bool shouldGenerateTitle = false,
     int? contextWindowTokens,
+    BuildContext? buildContext,
   }) async {
     try {
       // Build history from currently displayed messages (branch-aware)
@@ -553,41 +578,114 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
         ...compressionResult.messages,
       ];
 
-      // ── Stream assistant response ────────────────────────────────
-      final assistantMsgId = const Uuid().v4();
-      final streamingMsg = DisplayMessage(
-        id: assistantMsgId,
-        role: ChatRole.assistant,
-        content: '',
-        createdAt: DateTime.now(),
-        isStreaming: true,
-        parentMessageId: parentMessageId,
-      );
+      // ── Agentic tool-call loop ───────────────────────────────────
+      // The LLM may request tool invocations. We loop up to
+      // [_maxToolCallIterations] times, executing tools and feeding results
+      // back until the LLM returns a plain text response.
+      final toolSpecs = getBuiltInToolSpecs();
+      final toolExecutor = ref.read(toolBridgeExecutorProvider);
 
+      final assistantMsgId = const Uuid().v4();
       state = AsyncData(
         state.value!.copyWith(
-          messages: [...(state.value?.messages ?? []), streamingMsg],
+          messages: [
+            ...(state.value?.messages ?? []),
+            DisplayMessage(
+              id: assistantMsgId,
+              role: ChatRole.assistant,
+              content: '',
+              createdAt: DateTime.now(),
+              isStreaming: true,
+              parentMessageId: parentMessageId,
+            ),
+          ],
         ),
       );
 
-      final buffer = StringBuffer();
-      await for (final chunk in gateway.chat(effectiveHistory)) {
-        buffer.write(chunk.textDelta);
-        final visibleContent = _stripTitleTagForDisplay(buffer.toString());
-        final updated = streamingMsg.copyWith(
-          content: visibleContent,
-          isStreaming: true,
+      final workingHistory = List<ChatMessage>.from(effectiveHistory);
+      String finalText = '';
+
+      for (var iter = 0; iter < _maxToolCallIterations; iter++) {
+        final iterBuffer = StringBuffer();
+        final iterToolCalls = <ToolCallRequest>[];
+
+        await for (final chunk in gateway.chat(
+          workingHistory,
+          options: LlmChatOptions(tools: toolSpecs),
+        )) {
+          iterBuffer.write(chunk.textDelta);
+          if (chunk.toolCalls != null) {
+            iterToolCalls.addAll(chunk.toolCalls!);
+          }
+          // Update streaming UI for text content
+          if (chunk.textDelta.isNotEmpty) {
+            final visibleContent =
+                _stripTitleTagForDisplay(iterBuffer.toString());
+            final msgs =
+                List<DisplayMessage>.from(state.value?.messages ?? []);
+            final idx = msgs.indexWhere((m) => m.id == assistantMsgId);
+            if (idx >= 0) {
+              msgs[idx] =
+                  msgs[idx].copyWith(content: visibleContent, isStreaming: true);
+              state = AsyncData(state.value!.copyWith(messages: msgs));
+            }
+          }
+        }
+
+        if (iterToolCalls.isEmpty) {
+          // No tool calls — this is the final text response.
+          finalText = iterBuffer.toString();
+          break;
+        }
+
+        // Process tool calls: add assistant tool-call message to history,
+        // execute each tool, then append tool results to history.
+        workingHistory.add(
+          ChatMessage(
+            role: ChatRole.assistant,
+            content: iterBuffer.toString(),
+            toolCalls: List<ToolCallRequest>.unmodifiable(iterToolCalls),
+          ),
         );
-        final msgs = List<DisplayMessage>.from(
-          state.value?.messages ?? [],
-        );
-        final idx = msgs.indexWhere((m) => m.id == assistantMsgId);
-        if (idx >= 0) msgs[idx] = updated;
-        state = AsyncData(state.value!.copyWith(messages: msgs));
+
+        for (final toolCall in iterToolCalls) {
+          ref
+              .read(toolCallStatusProvider.notifier)
+              .setActive(toolCall.name);
+
+          final ToolCallResult result;
+          if (buildContext != null && buildContext.mounted) {
+            result = await toolExecutor.invoke(
+              toolId: toolCall.name,
+              context: buildContext,
+              arguments: toolCall.arguments,
+            );
+          } else {
+            result = await toolExecutor.invokeBackground(
+              toolId: toolCall.name,
+              arguments: toolCall.arguments,
+            );
+          }
+
+          ref.read(toolCallStatusProvider.notifier).clear();
+
+          final toolOutput = result.isSuccess
+              ? (result.output ?? '')
+              : '工具调用失败: ${result.errorMessage}';
+
+          workingHistory.add(
+            ChatMessage(
+              role: ChatRole.tool,
+              content: toolOutput,
+              name: toolCall.name,
+              toolCallId: toolCall.callId,
+            ),
+          );
+        }
       }
 
       final parsed = _extractTitleAndSanitizeContent(
-        raw: buffer.toString(),
+        raw: finalText,
         fallbackUserContent: userContent,
       );
 

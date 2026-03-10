@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 import 'package:personal_ai_assistant/core/network/secure_http_client.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/chat_chunk.dart';
@@ -7,6 +7,7 @@ import 'package:personal_ai_assistant/features/llm_gateway/data/models/embedding
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/gemini_provider_config.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/llm_chat_options.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/llm_model_info.dart';
+import 'package:personal_ai_assistant/features/llm_gateway/data/models/tool_spec.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/provider_api_key_store.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/domain/llm_gateway.dart';
 
@@ -43,6 +44,46 @@ class GeminiProvider implements LlmGateway {
     return Uri.parse('$text/');
   }
 
+  /// Converts a [ChatMessage] to Gemini's content format.
+  /// Tool result messages use role "function" with a functionResponse part.
+  static Map<String, dynamic> _serializeMessage(ChatMessage message) {
+    if (message.role == ChatRole.tool) {
+      return {
+        'role': 'function',
+        'parts': [
+          {
+            'functionResponse': {
+              'name': message.name ?? '',
+              'response': {'output': message.content},
+            },
+          },
+        ],
+      };
+    }
+    if (message.hasToolCalls) {
+      return {
+        'role': 'model',
+        'parts': [
+          if (message.content.isNotEmpty) {'text': message.content},
+          ...message.toolCalls!.map(
+            (tc) => {
+              'functionCall': {
+                'name': tc.name,
+                'args': tc.arguments,
+              },
+            },
+          ),
+        ],
+      };
+    }
+    return {
+      'role': message.role == ChatRole.assistant ? 'model' : 'user',
+      'parts': [
+        {'text': message.content},
+      ],
+    };
+  }
+
   @override
   Stream<ChatChunk> chat(
     List<ChatMessage> messages, {
@@ -58,6 +99,9 @@ class GeminiProvider implements LlmGateway {
       throw StateError('Gemini model must be configured');
     }
 
+    final hasTools = options.tools != null && options.tools!.isNotEmpty;
+    final nonSystemMessages = messages.where((m) => m.role != ChatRole.system).toList();
+
     final response = await _httpClient.post(
       _buildUri('models/$modelId:generateContent'),
       headers: {
@@ -65,17 +109,7 @@ class GeminiProvider implements LlmGateway {
         'Content-Type': 'application/json',
       },
       body: jsonEncode({
-        'contents': messages
-            .where((m) => m.role != ChatRole.system)
-            .map(
-              (m) => {
-                'role': m.role == ChatRole.assistant ? 'model' : 'user',
-                'parts': [
-                  {'text': m.content},
-                ],
-              },
-            )
-            .toList(growable: false),
+        'contents': nonSystemMessages.map(_serializeMessage).toList(growable: false),
         if (options.temperature != null)
           'generationConfig': {
             'temperature': options.temperature,
@@ -83,6 +117,21 @@ class GeminiProvider implements LlmGateway {
               'maxOutputTokens': options.maxOutputTokens,
             if (options.topP != null) 'topP': options.topP,
           },
+        if (hasTools)
+          'tools': [
+            {
+              'functionDeclarations': options.tools!
+                  .map(
+                    (t) => {
+                      'name': t.name,
+                      'description': t.description,
+                      'parameters': t.parameters.toJson(),
+                    },
+                  )
+                  .toList(),
+            },
+          ],
+        if (hasTools) 'toolConfig': {'functionCallingConfig': {'mode': 'AUTO'}},
       }),
     );
 
@@ -99,11 +148,40 @@ class GeminiProvider implements LlmGateway {
         : const <String, dynamic>{};
     final content = first['content'] as Map<String, dynamic>?;
     final parts = (content?['parts'] as List<dynamic>? ?? const []);
-    final text = parts
-        .whereType<Map<String, dynamic>>()
-        .map((p) => p['text'] as String? ?? '')
-        .join();
     final usage = json['usageMetadata'] as Map<String, dynamic>?;
+
+    // Separate text parts from functionCall parts
+    final textParts = <String>[];
+    final toolCalls = <ToolCallRequest>[];
+
+    for (final part in parts.whereType<Map<String, dynamic>>()) {
+      if (part.containsKey('text')) {
+        textParts.add(part['text'] as String? ?? '');
+      } else if (part.containsKey('functionCall')) {
+        final fc = part['functionCall'] as Map<String, dynamic>;
+        final args = fc['args'];
+        toolCalls.add(
+          ToolCallRequest(
+            callId: '${fc['name']}_${DateTime.now().millisecondsSinceEpoch}',
+            name: fc['name'] as String? ?? '',
+            arguments: args is Map<String, dynamic> ? args : const {},
+          ),
+        );
+      }
+    }
+
+    final text = textParts.join();
+
+    if (toolCalls.isNotEmpty) {
+      yield ChatChunk(
+        textDelta: text,
+        toolCalls: toolCalls,
+        inputTokens: usage?['promptTokenCount'] as int?,
+        outputTokens: usage?['candidatesTokenCount'] as int?,
+      );
+      yield const ChatChunk(textDelta: '', isDone: true);
+      return;
+    }
 
     yield ChatChunk(
       textDelta: text,
@@ -190,3 +268,4 @@ class GeminiProvider implements LlmGateway {
     }).toList(growable: false);
   }
 }
+

@@ -7,6 +7,7 @@ import 'package:personal_ai_assistant/features/llm_gateway/data/models/embedding
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/llm_chat_options.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/llm_model_info.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/models/openai_compatible_provider_config.dart';
+import 'package:personal_ai_assistant/features/llm_gateway/data/models/tool_spec.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/provider_api_key_store.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/domain/llm_gateway.dart';
 
@@ -23,6 +24,41 @@ class OpenAiCompatibleProvider implements LlmGateway {
 	final ProviderApiKeyStore _keyStore;
 	final SecureHttpClient _httpClient;
 
+	/// Serialises a [ChatMessage] to the OpenAI Chat Completions format.
+	/// Handles tool-call assistant messages and tool result messages.
+	static Map<String, dynamic> _serializeMessage(ChatMessage message) {
+		if (message.role == ChatRole.tool) {
+			return {
+				'role': 'tool',
+				'tool_call_id': message.toolCallId ?? '',
+				'content': message.content,
+			};
+		}
+		if (message.hasToolCalls) {
+			return {
+				'role': 'assistant',
+				if (message.content.isNotEmpty) 'content': message.content,
+				'tool_calls': message.toolCalls!
+						.map(
+							(tc) => {
+								'id': tc.callId,
+								'type': 'function',
+								'function': {
+									'name': tc.name,
+									'arguments': jsonEncode(tc.arguments),
+								},
+							},
+						)
+						.toList(),
+			};
+		}
+		return {
+			'role': message.role.name,
+			'content': message.content,
+			if (message.name != null) 'name': message.name,
+		};
+	}
+
 	@override
 	Stream<ChatChunk> chat(
 		List<ChatMessage> messages, {
@@ -32,6 +68,8 @@ class OpenAiCompatibleProvider implements LlmGateway {
 		if (apiKey == null || apiKey.isEmpty) {
 			throw StateError('API key not configured for ${_config.providerId}');
 		}
+
+		final hasTools = options.tools != null && options.tools!.isNotEmpty;
 
 		final response = await _httpClient.post(
 			_config.baseUrl.resolve('chat/completions'),
@@ -45,15 +83,12 @@ class OpenAiCompatibleProvider implements LlmGateway {
 				'max_tokens': options.maxOutputTokens,
 				'top_p': options.topP,
 				'stream': false,
-				'messages': messages
-						.map(
-							(message) => {
-								'role': message.role.name,
-								'content': message.content,
-								if (message.name != null) 'name': message.name,
-							},
-						)
-						.toList(),
+				'messages': messages.map(_serializeMessage).toList(),
+				if (hasTools)
+					'tools': options.tools!
+							.map((t) => {'type': 'function', 'function': t.toJson()})
+							.toList(),
+				if (hasTools) 'tool_choice': 'auto',
 			}),
 		);
 
@@ -71,6 +106,29 @@ class OpenAiCompatibleProvider implements LlmGateway {
 		final message = firstChoice['message'] as Map<String, dynamic>?;
 		final content = (message?['content'] as String?) ?? '';
 		final usage = json['usage'] as Map<String, dynamic>?;
+
+		// Parse tool calls if present
+		final rawToolCalls = message?['tool_calls'] as List<dynamic>?;
+		if (rawToolCalls != null && rawToolCalls.isNotEmpty) {
+			final toolCalls = rawToolCalls.map((tc) {
+				final tcMap = tc as Map<String, dynamic>;
+				final func = tcMap['function'] as Map<String, dynamic>;
+				return ToolCallRequest.fromArgumentsJson(
+					callId: tcMap['id'] as String? ?? '',
+					name: func['name'] as String? ?? '',
+					argumentsJson: func['arguments'] as String? ?? '{}',
+				);
+			}).toList();
+
+			yield ChatChunk(
+				textDelta: content,
+				toolCalls: toolCalls,
+				inputTokens: usage?['prompt_tokens'] as int?,
+				outputTokens: usage?['completion_tokens'] as int?,
+			);
+			yield const ChatChunk(textDelta: '', isDone: true);
+			return;
+		}
 
 		yield ChatChunk(
 			textDelta: content,

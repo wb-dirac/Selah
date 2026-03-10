@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:personal_ai_assistant/features/llm_gateway/data/models/tool_spec.dart';
+
 enum ChatRole { system, user, assistant, tool }
 
 /// An image attached to a [ChatMessage] for multimodal LLM input.
@@ -22,16 +24,31 @@ class ChatMessage {
     required this.content,
     this.name,
     this.images,
+    this.toolCallId,
+    this.toolCalls,
   });
 
   final ChatRole role;
   final String content;
+
+  /// For [ChatRole.tool] messages: the name of the tool that was called.
+  /// For Gemini function responses: required to identify the function.
   final String? name;
 
   /// Optional images for multimodal input (vision models).
   /// Only meaningful for [ChatRole.user] messages.
   final List<ChatImage>? images;
 
+  /// For [ChatRole.tool] messages: the provider-issued call ID to link
+  /// this result back to the originating [ToolCallRequest].
+  final String? toolCallId;
+
+  /// For [ChatRole.assistant] messages: tool calls requested by the LLM.
+  final List<ToolCallRequest>? toolCalls;
+
   /// Whether this message contains image content.
   bool get hasImages => images != null && images!.isNotEmpty;
+
+  /// Whether this assistant message contains tool call requests.
+  bool get hasToolCalls => toolCalls != null && toolCalls!.isNotEmpty;
 }

@@ -12,6 +12,9 @@ class ToolCallConfirmationService {
 
   final ToolPermissionService _permissionService;
 
+  /// Exposes the underlying permission service for background tool invocation.
+  ToolPermissionService get permissionService => _permissionService;
+
   Future<ToolCallDecision> checkAndConfirm({
     required String toolId,
     required BuildContext context,
