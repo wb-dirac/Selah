@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:personal_ai_assistant/features/tool_bridge/data/calendar_tools.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/data/communication_tools.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/data/contact_tools.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/data/system_tools.dart';
@@ -62,6 +63,9 @@ final toolBridgeExecutorProvider = Provider<ToolBridgeExecutor>((ref) {
       'mail.compose': MailComposeTool(),
       'sms.send': SmsSendTool(),
       'phone.call': PhoneCallTool(),
+      'calendar.read': CalendarReadTool(),
+      'calendar.create': CalendarCreateTool(),
+      'calendar.update_delete': CalendarUpdateDeleteTool(),
       'clipboard.read': ClipboardReadTool(),
       'clipboard.write': ClipboardWriteTool(),
       'system.share': SystemShareTool(),
