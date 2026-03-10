@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:personal_ai_assistant/features/tool_bridge/data/contact_tools.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/data/system_tools.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_call_confirmation_service.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_call_result.dart';
@@ -54,6 +55,9 @@ final toolBridgeExecutorProvider = Provider<ToolBridgeExecutor>((ref) {
   return ToolBridgeExecutor(
     confirmationService: ref.watch(toolCallConfirmationServiceProvider),
     executors: const <String, ToolExecutor>{
+      'contacts.read': ContactReadTool(),
+      'contacts.search': ContactSearchTool(),
+      'contacts.create': ContactCreateTool(),
       'clipboard.read': ClipboardReadTool(),
       'clipboard.write': ClipboardWriteTool(),
       'system.share': SystemShareTool(),
