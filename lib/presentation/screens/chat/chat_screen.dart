@@ -15,6 +15,7 @@ import 'package:personal_ai_assistant/features/privacy/data/services/outbound_pr
 import 'package:personal_ai_assistant/features/privacy/data/services/privacy_preferences_service.dart';
 import 'package:personal_ai_assistant/features/privacy/presentation/widgets/privacy_review_dialogs.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_bridge_executor.dart';
+import 'package:personal_ai_assistant/features/voice/presentation/widgets/voice_input_button.dart';
 import 'package:personal_ai_assistant/orchestration/media/file_input_service.dart';
 import 'package:personal_ai_assistant/orchestration/media/image_input_service.dart';
 import 'package:personal_ai_assistant/presentation/screens/widgets/feature_disabled_view.dart';
@@ -597,6 +598,8 @@ class _InputRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
+            VoiceInputButton(enabled: !isStreaming),
+            const SizedBox(width: 4),
             ValueListenableBuilder<TextEditingValue>(
               valueListenable: controller,
               builder: (context, value, child) {
