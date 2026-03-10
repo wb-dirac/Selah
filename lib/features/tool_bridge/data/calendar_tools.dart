@@ -1,3 +1,4 @@
+import 'package:device_calendar/device_calendar.dart' as dc;
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_call_result.dart';
 
 class CalendarEvent {
@@ -75,6 +76,216 @@ class StubCalendarDataSource implements CalendarDataSource {
   Future<CalendarEvent?> findById(String eventId) async => null;
 }
 
+class _CalendarEventRef {
+  const _CalendarEventRef({
+    required this.calendarId,
+    required this.event,
+  });
+
+  final String calendarId;
+  final dc.Event event;
+}
+
+class DeviceCalendarDataSource implements CalendarDataSource {
+  const DeviceCalendarDataSource();
+
+  dc.DeviceCalendarPlugin _plugin() => dc.DeviceCalendarPlugin();
+
+  @override
+  Future<List<CalendarEvent>> readRange({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final plugin = _plugin();
+    await _ensurePermission(plugin);
+
+    final calendarIds = await _readableCalendarIds(plugin);
+    final output = <CalendarEvent>[];
+
+    for (final calendarId in calendarIds) {
+      final eventsResult = await plugin.retrieveEvents(
+        calendarId,
+        dc.RetrieveEventsParams(startDate: from, endDate: to),
+      );
+      if (eventsResult.hasErrors || eventsResult.data == null) {
+        continue;
+      }
+      output.addAll(eventsResult.data!.map(_toCalendarEvent));
+    }
+
+    output.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return output;
+  }
+
+  @override
+  Future<String> createEvent(CalendarEvent event) async {
+    final plugin = _plugin();
+    await _ensurePermission(plugin);
+
+    final calendarId = await _defaultWritableCalendarId(plugin);
+    if (calendarId == null) {
+      throw StateError('未找到可写入的系统日历');
+    }
+
+    final created = dc.Event(
+      calendarId,
+      title: event.title,
+      description: event.notes,
+      location: event.location,
+      start: dc.TZDateTime.from(event.startTime, dc.local),
+      end: dc.TZDateTime.from(event.endTime, dc.local),
+      allDay: event.isAllDay,
+    );
+
+    final result = await plugin.createOrUpdateEvent(created);
+    if (result == null || result.hasErrors || (result.data ?? '').isEmpty) {
+      final msg = (result != null && result.errors.isNotEmpty)
+          ? result.errors.first.errorMessage
+          : '未知错误';
+      throw StateError('创建日历事件失败: $msg');
+    }
+
+    return result.data!;
+  }
+
+  @override
+  Future<void> updateEvent(CalendarEvent event) async {
+    final plugin = _plugin();
+    await _ensurePermission(plugin);
+
+    final ref = await _findEventRef(plugin, event.id);
+    if (ref == null) {
+      throw StateError('未找到日历事件: ${event.id}');
+    }
+
+    final updated = dc.Event(
+      ref.calendarId,
+      eventId: event.id,
+      title: event.title,
+      description: event.notes,
+      location: event.location,
+      start: dc.TZDateTime.from(event.startTime, dc.local),
+      end: dc.TZDateTime.from(event.endTime, dc.local),
+      allDay: event.isAllDay,
+    );
+
+    final result = await plugin.createOrUpdateEvent(updated);
+    if (result == null || result.hasErrors || (result.data ?? '').isEmpty) {
+      final msg = (result != null && result.errors.isNotEmpty)
+          ? result.errors.first.errorMessage
+          : '未知错误';
+      throw StateError('更新日历事件失败: $msg');
+    }
+  }
+
+  @override
+  Future<void> deleteEvent(String eventId) async {
+    final plugin = _plugin();
+    await _ensurePermission(plugin);
+
+    final ref = await _findEventRef(plugin, eventId);
+    if (ref == null) {
+      throw StateError('未找到日历事件: $eventId');
+    }
+
+    final result = await plugin.deleteEvent(ref.calendarId, eventId);
+    if (result.hasErrors || result.data != true) {
+      final msg = result.errors.isNotEmpty
+          ? result.errors.first.errorMessage
+          : '未知错误';
+      throw StateError('删除日历事件失败: $msg');
+    }
+  }
+
+  @override
+  Future<CalendarEvent?> findById(String eventId) async {
+    final plugin = _plugin();
+    await _ensurePermission(plugin);
+
+    final ref = await _findEventRef(plugin, eventId);
+    if (ref == null) return null;
+    return _toCalendarEvent(ref.event);
+  }
+
+  Future<void> _ensurePermission(dc.DeviceCalendarPlugin plugin) async {
+    final has = await plugin.hasPermissions();
+    if (has.hasErrors) {
+      throw StateError('读取日历权限状态失败');
+    }
+
+    if (has.data == true) return;
+
+    final granted = await plugin.requestPermissions();
+    if (granted.hasErrors || granted.data != true) {
+      throw StateError('日历权限未授予');
+    }
+  }
+
+  Future<List<String>> _readableCalendarIds(dc.DeviceCalendarPlugin plugin) async {
+    final calendarsResult = await plugin.retrieveCalendars();
+    if (calendarsResult.hasErrors || calendarsResult.data == null) {
+      throw StateError('读取系统日历列表失败');
+    }
+    return calendarsResult.data!
+        .map((c) => c.id)
+        .whereType<String>()
+        .toList(growable: false);
+  }
+
+  Future<String?> _defaultWritableCalendarId(dc.DeviceCalendarPlugin plugin) async {
+    final calendarsResult = await plugin.retrieveCalendars();
+    if (calendarsResult.hasErrors || calendarsResult.data == null) {
+      return null;
+    }
+
+    final writable = calendarsResult.data!
+        .where((c) => c.id != null && c.isReadOnly != true)
+        .toList(growable: false);
+    final selected = writable.isNotEmpty
+        ? (writable.firstWhere(
+            (c) => c.isDefault == true,
+            orElse: () => writable.first,
+          ))
+        : null;
+    return selected?.id;
+  }
+
+  Future<_CalendarEventRef?> _findEventRef(
+    dc.DeviceCalendarPlugin plugin,
+    String eventId,
+  ) async {
+    final calendarIds = await _readableCalendarIds(plugin);
+    for (final calendarId in calendarIds) {
+      final result = await plugin.retrieveEvents(
+        calendarId,
+        dc.RetrieveEventsParams(eventIds: <String>[eventId]),
+      );
+      if (result.hasErrors || result.data == null || result.data!.isEmpty) {
+        continue;
+      }
+      return _CalendarEventRef(
+        calendarId: calendarId,
+        event: result.data!.first,
+      );
+    }
+    return null;
+  }
+
+  CalendarEvent _toCalendarEvent(dc.Event e) {
+    final start = e.start?.toLocal() ?? DateTime.now();
+    final end = e.end?.toLocal() ?? start.add(const Duration(hours: 1));
+    return CalendarEvent(
+      id: e.eventId ?? '',
+      title: e.title ?? '(无标题)',
+      startTime: start,
+      endTime: end,
+      location: e.location,
+      notes: e.description,
+      isAllDay: e.allDay ?? false,
+    );
+  }
+}
+
 DateTime? _parseDateTime(Object? value) {
   if (value is String) return DateTime.tryParse(value);
   return null;
@@ -82,7 +293,7 @@ DateTime? _parseDateTime(Object? value) {
 
 class CalendarReadTool implements ToolExecutor {
   const CalendarReadTool({CalendarDataSource? dataSource})
-      : _dataSource = dataSource ?? const StubCalendarDataSource();
+  : _dataSource = dataSource ?? const DeviceCalendarDataSource();
 
   final CalendarDataSource _dataSource;
 
@@ -91,8 +302,8 @@ class CalendarReadTool implements ToolExecutor {
 
   @override
   Future<ToolCallResult> execute(Map<String, dynamic> arguments) async {
-    final from = _parseDateTime(arguments['from']);
-    final to = _parseDateTime(arguments['to']);
+    final from = _parseDateTime(arguments['from'] ?? arguments['start_date']);
+    final to = _parseDateTime(arguments['to'] ?? arguments['end_date']);
 
     if (from == null || to == null) {
       return const ToolCallResult.error(
@@ -129,7 +340,7 @@ class CalendarReadTool implements ToolExecutor {
 
 class CalendarCreateTool implements ToolExecutor {
   const CalendarCreateTool({CalendarDataSource? dataSource})
-      : _dataSource = dataSource ?? const StubCalendarDataSource();
+  : _dataSource = dataSource ?? const DeviceCalendarDataSource();
 
   final CalendarDataSource _dataSource;
 
@@ -169,7 +380,7 @@ class CalendarCreateTool implements ToolExecutor {
       startTime: startTime,
       endTime: endTime,
       location: arguments['location']?.toString(),
-      notes: arguments['notes']?.toString(),
+      notes: arguments['notes']?.toString() ?? arguments['description']?.toString(),
       isAllDay: arguments['is_all_day'] as bool? ?? false,
     );
 
@@ -190,7 +401,7 @@ class CalendarCreateTool implements ToolExecutor {
 
 class CalendarUpdateDeleteTool implements ToolExecutor {
   const CalendarUpdateDeleteTool({CalendarDataSource? dataSource})
-      : _dataSource = dataSource ?? const StubCalendarDataSource();
+  : _dataSource = dataSource ?? const DeviceCalendarDataSource();
 
   final CalendarDataSource _dataSource;
 
@@ -254,7 +465,9 @@ class CalendarUpdateDeleteTool implements ToolExecutor {
             : existing.location,
         notes: arguments.containsKey('notes')
             ? arguments['notes']?.toString()
-            : existing.notes,
+          : (arguments.containsKey('description')
+            ? arguments['description']?.toString()
+            : existing.notes),
         isAllDay: arguments['is_all_day'] as bool? ?? existing.isAllDay,
       );
 

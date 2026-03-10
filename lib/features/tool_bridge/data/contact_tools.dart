@@ -1,3 +1,4 @@
+import 'package:flutter_contacts/flutter_contacts.dart' as fc;
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_call_result.dart';
 
 class ContactEntry {
@@ -54,9 +55,113 @@ class StubContactsDataSource implements ContactsDataSource {
   Future<String> create(ContactEntry entry) async => entry.id;
 }
 
+class DeviceContactsDataSource implements ContactsDataSource {
+  const DeviceContactsDataSource();
+
+  static const Set<fc.ContactProperty> _properties = <fc.ContactProperty>{
+    fc.ContactProperty.name,
+    fc.ContactProperty.phone,
+    fc.ContactProperty.email,
+    fc.ContactProperty.organization,
+  };
+
+  @override
+  Future<List<ContactEntry>> readAll() async {
+    if (!await _ensureReadPermission()) return const <ContactEntry>[];
+    final contacts = await fc.FlutterContacts.getAll(properties: _properties);
+    return contacts.map(_toEntry).toList(growable: false);
+  }
+
+  @override
+  Future<List<ContactEntry>> search(String query) async {
+    if (!await _ensureReadPermission()) return const <ContactEntry>[];
+    final keyword = query.trim();
+    if (keyword.isEmpty) return const <ContactEntry>[];
+
+    final contacts = await fc.FlutterContacts.getAll(
+      properties: _properties,
+      filter: fc.ContactFilter.name(keyword),
+    );
+
+    final lower = keyword.toLowerCase();
+    return contacts
+        .map(_toEntry)
+        .where(
+          (entry) =>
+              entry.displayName.toLowerCase().contains(lower) ||
+              (entry.phone?.toLowerCase().contains(lower) ?? false) ||
+              (entry.email?.toLowerCase().contains(lower) ?? false) ||
+              (entry.organization?.toLowerCase().contains(lower) ?? false),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<String> create(ContactEntry entry) async {
+    if (!await _ensureWritePermission()) {
+      throw StateError('通讯录写入权限未授予');
+    }
+
+    final contact = fc.Contact(
+      name: fc.Name(first: entry.displayName),
+      phones: entry.phone == null
+          ? const <fc.Phone>[]
+          : <fc.Phone>[fc.Phone(number: entry.phone!)],
+      emails: entry.email == null
+          ? const <fc.Email>[]
+          : <fc.Email>[fc.Email(address: entry.email!)],
+      organizations: entry.organization == null
+          ? const <fc.Organization>[]
+          : <fc.Organization>[fc.Organization(name: entry.organization)],
+    );
+    return fc.FlutterContacts.create(contact);
+  }
+
+  Future<bool> _ensureReadPermission() async {
+    final status = await fc.FlutterContacts.permissions.request(
+      fc.PermissionType.read,
+    );
+    return status == fc.PermissionStatus.granted ||
+        status == fc.PermissionStatus.limited;
+  }
+
+  Future<bool> _ensureWritePermission() async {
+    final status = await fc.FlutterContacts.permissions.request(
+      fc.PermissionType.readWrite,
+    );
+    return status == fc.PermissionStatus.granted ||
+        status == fc.PermissionStatus.limited;
+  }
+
+  ContactEntry _toEntry(fc.Contact c) {
+    final displayName = (c.displayName ?? '').trim().isNotEmpty
+        ? c.displayName!.trim()
+        : _fallbackDisplayName(c.name);
+
+    return ContactEntry(
+      id: c.id ?? '',
+      displayName: displayName,
+      phone: c.phones.isNotEmpty ? c.phones.first.number : null,
+      email: c.emails.isNotEmpty ? c.emails.first.address : null,
+      organization: c.organizations.isNotEmpty ? c.organizations.first.name : null,
+    );
+  }
+
+  String _fallbackDisplayName(fc.Name? name) {
+    if (name == null) return '未命名联系人';
+    final parts = <String>[
+      if ((name.first ?? '').trim().isNotEmpty) name.first!.trim(),
+      if ((name.middle ?? '').trim().isNotEmpty) name.middle!.trim(),
+      if ((name.last ?? '').trim().isNotEmpty) name.last!.trim(),
+    ];
+    if (parts.isEmpty) return '未命名联系人';
+    return parts.join(' ');
+  }
+}
+
 class ContactReadTool implements ToolExecutor {
   const ContactReadTool({ContactsDataSource? dataSource})
-      : _dataSource = dataSource ?? const StubContactsDataSource();
+  : _dataSource = dataSource ?? const DeviceContactsDataSource();
 
   final ContactsDataSource _dataSource;
 
@@ -86,7 +191,7 @@ class ContactReadTool implements ToolExecutor {
 
 class ContactSearchTool implements ToolExecutor {
   const ContactSearchTool({ContactsDataSource? dataSource})
-      : _dataSource = dataSource ?? const StubContactsDataSource();
+  : _dataSource = dataSource ?? const DeviceContactsDataSource();
 
   final ContactsDataSource _dataSource;
 
@@ -125,7 +230,7 @@ class ContactSearchTool implements ToolExecutor {
 
 class ContactCreateTool implements ToolExecutor {
   const ContactCreateTool({ContactsDataSource? dataSource})
-      : _dataSource = dataSource ?? const StubContactsDataSource();
+  : _dataSource = dataSource ?? const DeviceContactsDataSource();
 
   final ContactsDataSource _dataSource;
 

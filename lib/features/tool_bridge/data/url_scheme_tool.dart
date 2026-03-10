@@ -27,13 +27,23 @@ class UrlSchemeTool implements ToolExecutor {
       );
     }
 
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    return launched
-        ? ToolCallResult.success(toolId: 'url_scheme.launch', output: '已打开：$rawUrl')
-        : ToolCallResult.error(
-            toolId: 'url_scheme.launch',
-            errorMessage: '无法打开 URL：$rawUrl',
-          );
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      return launched
+          ? ToolCallResult.success(toolId: 'url_scheme.launch', output: '已打开：$rawUrl')
+          : ToolCallResult.error(
+              toolId: 'url_scheme.launch',
+              errorMessage: '无法打开 URL：$rawUrl',
+            );
+    } catch (e) {
+      return ToolCallResult.error(
+        toolId: 'url_scheme.launch',
+        errorMessage: '打开 URL 失败：$e',
+      );
+    }
   }
 }
 

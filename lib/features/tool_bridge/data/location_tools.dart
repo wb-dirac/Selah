@@ -1,3 +1,4 @@
+import 'package:geolocator/geolocator.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_call_result.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -39,6 +40,37 @@ class StubLocationDataSource implements LocationDataSource {
   Future<LocationCoordinates?> getCurrentLocation() async => null;
 }
 
+class DeviceLocationDataSource implements LocationDataSource {
+  const DeviceLocationDataSource();
+
+  @override
+  Future<LocationCoordinates?> getCurrentLocation() async {
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (!enabled) return null;
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return null;
+    }
+
+    final position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    return LocationCoordinates(
+      latitude: position.latitude,
+      longitude: position.longitude,
+      accuracy: position.accuracy,
+      altitudeMeters: position.altitude,
+    );
+  }
+}
+
 abstract class MapSearchLauncher {
   Future<bool> searchPlace(String query);
 }
@@ -76,7 +108,7 @@ class _InMemoryLocationSession {
 
 class LocationCurrentTool implements ToolExecutor {
   const LocationCurrentTool({LocationDataSource? dataSource})
-      : _dataSource = dataSource ?? const StubLocationDataSource();
+  : _dataSource = dataSource ?? const DeviceLocationDataSource();
 
   final LocationDataSource _dataSource;
 
