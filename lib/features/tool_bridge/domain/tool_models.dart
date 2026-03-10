@@ -253,6 +253,13 @@ const List<ToolDefinition> builtInToolDefinitions = <ToolDefinition>[
     description: '读取当前设备位置，仅用于当前会话',
   ),
   ToolDefinition(
+    id: 'location.search',
+    displayName: '地点搜索',
+    category: ToolCategory.location,
+    permissionLevel: ToolPermissionLevel.l0,
+    description: '在地图应用中搜索指定地点或关键词',
+  ),
+  ToolDefinition(
     id: 'clipboard.read',
     displayName: '读取剪贴板',
     category: ToolCategory.system,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/data/calendar_tools.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/data/communication_tools.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/data/contact_tools.dart';
+import 'package:personal_ai_assistant/features/tool_bridge/data/location_tools.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/data/system_tools.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_call_confirmation_service.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_call_result.dart';
@@ -66,6 +67,8 @@ final toolBridgeExecutorProvider = Provider<ToolBridgeExecutor>((ref) {
       'calendar.read': CalendarReadTool(),
       'calendar.create': CalendarCreateTool(),
       'calendar.update_delete': CalendarUpdateDeleteTool(),
+      'location.current': LocationCurrentTool(),
+      'location.search': LocationSearchTool(),
       'clipboard.read': ClipboardReadTool(),
       'clipboard.write': ClipboardWriteTool(),
       'system.share': SystemShareTool(),
