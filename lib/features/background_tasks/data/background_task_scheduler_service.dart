@@ -119,9 +119,9 @@ class BackgroundTaskSchedulerService {
           task.id,
           frequency: freq,
           initialDelay: _initialDelayForTask(task),
-          existingWorkPolicy: ExistingWorkPolicy.replace,
+          existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
           constraints: Constraints(
-            networkType: NetworkType.not_required,
+            networkType: NetworkType.connected,
           ),
         );
         _logger?.info(
@@ -136,7 +136,7 @@ class BackgroundTaskSchedulerService {
           initialDelay: delay,
           existingWorkPolicy: ExistingWorkPolicy.replace,
           constraints: Constraints(
-            networkType: NetworkType.not_required,
+            networkType: NetworkType.connected,
           ),
         );
         _logger?.info(
@@ -162,9 +162,9 @@ class BackgroundTaskSchedulerService {
             task.id,
             task.id,
             frequency: freq,
-            existingWorkPolicy: ExistingWorkPolicy.replace,
+            existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
             constraints: Constraints(
-              networkType: NetworkType.not_required,
+              networkType: NetworkType.connected,
             ),
           );
           _logger?.info(
