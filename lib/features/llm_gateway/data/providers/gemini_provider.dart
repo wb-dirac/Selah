@@ -71,6 +71,8 @@ class GeminiProvider implements LlmGateway {
                 'name': tc.name,
                 'args': tc.arguments,
               },
+              if (tc.thoughtSignature != null)
+                'thoughtSignature': tc.thoughtSignature,
             },
           ),
         ],
@@ -160,11 +162,15 @@ class GeminiProvider implements LlmGateway {
       } else if (part.containsKey('functionCall')) {
         final fc = part['functionCall'] as Map<String, dynamic>;
         final args = fc['args'];
+        final thoughtSignature =
+            part['thoughtSignature'] as String? ??
+            part['thought_signature'] as String?;
         toolCalls.add(
           ToolCallRequest(
             callId: '${fc['name']}_${DateTime.now().millisecondsSinceEpoch}',
             name: fc['name'] as String? ?? '',
             arguments: args is Map<String, dynamic> ? args : const {},
+            thoughtSignature: thoughtSignature,
           ),
         );
       }

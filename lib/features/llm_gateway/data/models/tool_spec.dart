@@ -81,6 +81,7 @@ class ToolCallRequest {
     required this.callId,
     required this.name,
     required this.arguments,
+    this.thoughtSignature,
   });
 
   /// Provider-issued call identifier, used to match the result back to this call.
@@ -91,6 +92,12 @@ class ToolCallRequest {
 
   /// Parsed arguments map.
   final Map<String, dynamic> arguments;
+
+  /// Opaque signature emitted by Gemini thinking models alongside a
+  /// [functionCall] part.  Must be round-tripped verbatim in the conversation
+  /// history so the model can correlate its internal reasoning with the call.
+  /// Null for all non-Gemini-thinking providers.
+  final String? thoughtSignature;
 
   /// Parses a raw JSON-string argument payload into a [ToolCallRequest].
   /// Returns an empty arguments map on parse failure rather than throwing.
