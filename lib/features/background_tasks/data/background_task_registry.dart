@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:personal_ai_assistant/features/background_tasks/data/background_task_scheduler_service.dart';
 import 'package:personal_ai_assistant/features/background_tasks/domain/background_task_models.dart';
 
 class BackgroundTaskRegistryState {
@@ -34,8 +35,12 @@ class BackgroundTaskRegistryNotifier
   @override
   BackgroundTaskRegistryState build() => const BackgroundTaskRegistryState();
 
+  BackgroundTaskSchedulerService get _scheduler =>
+      ref.read(backgroundTaskSchedulerServiceProvider);
+
   void addTask(BackgroundTask task) {
     state = state.copyWith(tasks: [...state.tasks, task]);
+    _scheduler.scheduleTask(task);
   }
 
   void updateTask(BackgroundTask task) {
@@ -43,6 +48,12 @@ class BackgroundTaskRegistryNotifier
         .map((t) => t.id == task.id ? task : t)
         .toList();
     state = state.copyWith(tasks: updated);
+    // Reschedule if active, cancel if paused/completed/failed.
+    if (task.status == BackgroundTaskStatus.active) {
+      _scheduler.scheduleTask(task);
+    } else {
+      _scheduler.cancelTask(task.id);
+    }
   }
 
   void removeTask(String taskId) {
@@ -50,14 +61,20 @@ class BackgroundTaskRegistryNotifier
     final updatedLogs = Map<String, List<TaskExecutionLog>>.from(state.logs)
       ..remove(taskId);
     state = BackgroundTaskRegistryState(tasks: updated, logs: updatedLogs);
+    _scheduler.cancelTask(taskId);
   }
 
   void pauseTask(String taskId) {
     _setStatus(taskId, BackgroundTaskStatus.paused);
+    _scheduler.cancelTask(taskId);
   }
 
   void resumeTask(String taskId) {
     _setStatus(taskId, BackgroundTaskStatus.active);
+    final task = state.tasks.where((t) => t.id == taskId).firstOrNull;
+    if (task != null) {
+      _scheduler.scheduleTask(task);
+    }
   }
 
   void appendLog(String taskId, TaskExecutionLog log) {

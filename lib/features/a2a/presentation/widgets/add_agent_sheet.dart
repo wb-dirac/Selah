@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:personal_ai_assistant/features/a2a/data/a2a_providers.dart';
+import 'package:personal_ai_assistant/features/a2a/data/agent_registry.dart';
+import 'package:personal_ai_assistant/features/a2a/domain/agent_card.dart';
+import 'package:personal_ai_assistant/features/a2a/domain/discovered_agent.dart';
+import 'package:personal_ai_assistant/features/a2a/presentation/screens/agent_directory_screen.dart';
 
-class AddAgentSheet extends StatefulWidget {
-  const AddAgentSheet({super.key, required this.onAddUrl});
-
-  final Future<void> Function(String url) onAddUrl;
+class AddAgentSheet extends ConsumerStatefulWidget {
+  const AddAgentSheet({super.key});
 
   @override
-  State<AddAgentSheet> createState() => _AddAgentSheetState();
+  ConsumerState<AddAgentSheet> createState() => _AddAgentSheetState();
 }
 
-class _AddAgentSheetState extends State<AddAgentSheet> {
+class _AddAgentSheetState extends ConsumerState<AddAgentSheet> {
   final TextEditingController _urlCtrl = TextEditingController();
   bool _loading = false;
 
@@ -75,11 +79,24 @@ class _AddAgentSheetState extends State<AddAgentSheet> {
               leading: const Icon(Icons.search_outlined),
               title: const Text('搜索公开 Agent 目录'),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.pop(context);
-              },
+              onTap: () => _openDirectory(context),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _openDirectory(BuildContext context) {
+    Navigator.pop(context);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AgentDirectoryScreen(
+          onAddAgent: (AgentCard card) {
+            ref
+                .read(agentRegistryProvider.notifier)
+                .addAgent(card, AgentSource.internet);
+          },
         ),
       ),
     );
@@ -96,8 +113,32 @@ class _AddAgentSheetState extends State<AddAgentSheet> {
     }
     setState(() => _loading = true);
     try {
-      await widget.onAddUrl(url);
-      if (mounted) Navigator.pop(context);
+      final hostClient = ref.read(a2aHostClientProvider);
+      final result = await ref
+          .read(agentRegistryProvider.notifier)
+          .addAgentFromUrl(url, hostClient);
+
+      if (!mounted) return;
+
+      if (result is AgentCardValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已添加 ${result.card.name}')),
+        );
+        Navigator.pop(context);
+      } else if (result is AgentCardInvalid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Agent Card 验证失败: ${result.errors.first}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('添加失败: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

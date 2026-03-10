@@ -4,6 +4,15 @@ enum AgentSource { lan, internet, manual }
 
 enum AgentConnectionStatus { online, offline, unknown }
 
+enum AgentAuthType { none, apiKey, oauth2 }
+
+class AgentAuthConfig {
+  const AgentAuthConfig({required this.type, this.tokenKeychainKey});
+
+  final AgentAuthType type;
+  final String? tokenKeychainKey;
+}
+
 class DiscoveredAgent {
   const DiscoveredAgent({
     required this.id,
@@ -28,22 +37,26 @@ class ConnectedAgent {
     required this.source,
     this.status = AgentConnectionStatus.unknown,
     this.lastCalledAt,
+    this.authConfig,
   });
 
   final AgentCard card;
   final AgentSource source;
   final AgentConnectionStatus status;
   final DateTime? lastCalledAt;
+  final AgentAuthConfig? authConfig;
 
   ConnectedAgent copyWith({
     AgentConnectionStatus? status,
     DateTime? lastCalledAt,
+    AgentAuthConfig? authConfig,
   }) {
     return ConnectedAgent(
       card: card,
       source: source,
       status: status ?? this.status,
       lastCalledAt: lastCalledAt ?? this.lastCalledAt,
+      authConfig: authConfig ?? this.authConfig,
     );
   }
 }

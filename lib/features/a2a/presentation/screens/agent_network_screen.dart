@@ -60,9 +60,7 @@ class AgentNetworkScreen extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => AddAgentSheet(
-        onAddUrl: (url) => _addByUrl(context, ref, url),
-      ),
+      builder: (_) => const AddAgentSheet(),
     );
   }
 
@@ -71,21 +69,6 @@ class AgentNetworkScreen extends ConsumerWidget {
       MaterialPageRoute<void>(
         builder: (_) => AgentDetailScreen(agent: agent),
       ),
-    );
-  }
-
-  Future<void> _addByUrl(
-      BuildContext context, WidgetRef ref, String url) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final card = AgentCard(
-      name: Uri.parse(url).host,
-      url: url,
-      capabilities: const AgentCapabilities(),
-      skills: const <AgentSkill>[],
-    );
-    ref.read(agentRegistryProvider.notifier).addAgent(card, AgentSource.manual);
-    messenger.showSnackBar(
-      SnackBar(content: Text('已添加 ${card.name}')),
     );
   }
 

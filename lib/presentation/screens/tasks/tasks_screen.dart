@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:personal_ai_assistant/capability/feature_flags/feature_flag_service.dart';
 import 'package:personal_ai_assistant/features/background_tasks/data/background_task_registry.dart';
 import 'package:personal_ai_assistant/features/background_tasks/domain/background_task_models.dart';
+import 'package:personal_ai_assistant/features/background_tasks/presentation/widgets/battery_optimization_guide_sheet.dart';
 import 'package:personal_ai_assistant/presentation/screens/widgets/feature_disabled_view.dart';
 
 class TasksScreen extends ConsumerWidget {
@@ -115,19 +118,51 @@ class TasksScreen extends ConsumerWidget {
   }
 
   void _openCreateTask(BuildContext context, WidgetRef ref) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => TaskEditScreen(
-          onSave: (task) {
-            ref
-                .read(backgroundTaskRegistryProvider.notifier)
-                .addTask(task);
-            Navigator.pop(context);
-          },
-        ),
-        fullscreenDialog: true,
-      ),
-    );
+    final isFirstTask = ref.read(backgroundTaskRegistryProvider).tasks.isEmpty;
+    BackgroundTask? savedTask;
+
+    Navigator.of(context)
+        .push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => TaskEditScreen(
+              onSave: (task) {
+                savedTask = task;
+                ref
+                    .read(backgroundTaskRegistryProvider.notifier)
+                    .addTask(task);
+                Navigator.pop(context);
+              },
+            ),
+            fullscreenDialog: true,
+          ),
+        )
+        .then((_) {
+          if (!context.mounted || savedTask == null) return;
+          final task = savedTask!;
+
+          // Inform the user that location tasks use polling, not OS geofences.
+          if (task.type == BackgroundTaskType.location) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  '位置触发使用每30秒定期位置检查，并非系统原生地理围栏。',
+                ),
+                duration: Duration(seconds: 5),
+              ),
+            );
+          }
+
+          // Show battery optimisation guide on Android when the first task
+          // is created (platform check is safe here — this is a mobile-only
+          // path that never runs on web).
+          if (Platform.isAndroid && isFirstTask) {
+            showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              builder: (_) => const BatteryOptimizationGuideSheet(),
+            );
+          }
+        });
   }
 
   void _openDetail(BuildContext context, WidgetRef ref, BackgroundTask task) {
@@ -729,13 +764,13 @@ class _LogTile extends StatelessWidget {
   String _resultLabel(TaskExecutionResult result) {
     switch (result) {
       case TaskExecutionResult.notificationSent:
-        return '✅ 已触发';
+        return '已触发';
       case TaskExecutionResult.actionExecuted:
-        return '✅ 操作执行';
+        return '操作执行';
       case TaskExecutionResult.silentSkip:
-        return '✅ 已触发 · 静默跳过';
+        return '已触发 · 静默跳过';
       case TaskExecutionResult.failed:
-        return '❌ 失败';
+        return '失败';
     }
   }
 }

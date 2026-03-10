@@ -94,25 +94,25 @@
 ## 8. 后台定时任务引擎
 
 - [x] 8.1 实现任务定义数据模型（任务类型 / Cron 表达式 / 触发条件 / 关联操作）
-- [ ] 8.2 实现 iOS BGTaskScheduler + BGProcessingTask 集成
-- [ ] 8.3 实现 Android WorkManager + AlarmManager 集成
-- [ ] 8.4 实现 macOS / Windows 系统 Cron / Task Scheduler 集成
-- [ ] 8.5 实现地理围栏监听（iOS CLLocationManager / Android Geofencing API）
-- [ ] 8.6 实现后台轻量模型推理决策流程（≤4B 模型，≤1s）
+- [x] 8.2 实现 iOS BGTaskScheduler + BGProcessingTask 集成
+- [x] 8.3 实现 Android WorkManager + AlarmManager 集成
+- [x] 8.4 实现 macOS / Windows 系统 Cron / Task Scheduler 集成
+- [x] 8.5 实现地理围栏监听（iOS CLLocationManager / Android Geofencing API）
+- [x] 8.6 实现后台轻量模型推理决策流程（≤4B 模型，≤1s）
 - [x] 8.7 实现通知快捷操作按钮（稍后提醒 / 已完成 / 立即处理）
-- [ ] 8.8 实现 iOS 后台时间不足时降级为推送通知补偿逻辑
-- [ ] 8.9 实现 Android 电池优化白名单引导流程
+- [x] 8.8 实现 iOS 后台时间不足时降级为推送通知补偿逻辑
+- [x] 8.9 实现 Android 电池优化白名单引导流程
 - [x] 8.10 实现任务管理 UI（任务列表 / 下次触发时间 / 执行历史日志）
 
 ## 9. A2A 协议
 
 - [x] 9.1 实现 Agent Card 数据结构及 `/.well-known/agent.json` 端点
-- [ ] 9.2 实现 A2A Host 客户端（HTTP/2 + gRPC，流式请求）
-- [ ] 9.3 实现 A2A Remote Agent 服务端（可选开启，含认证）
-- [ ] 9.4 实现 OAuth 2.0 和 API Key 两种 Agent 认证方式
+- [x] 9.2 实现 A2A Host 客户端（HTTP/2 + gRPC，流式请求）
+- [x] 9.3 实现 A2A Remote Agent 服务端（可选开启，含认证）
+- [x] 9.4 实现 OAuth 2.0 和 API Key 两种 Agent 认证方式
 - [x] 9.5 实现 mDNS / Bonjour 局域网 Agent 自动发现
 - [x] 9.6 实现手动添加 Agent（二维码扫描 + URL 直接输入）
-- [ ] 9.7 对接公开 A2A 注册目录，实现 Agent 浏览与搜索 UI
+- [x] 9.7 对接公开 A2A 注册目录，实现 Agent 浏览与搜索 UI
 - [x] 9.8 实现外部 Agent 调用前用户确认预览界面
 - [x] 9.9 实现 TLS 1.3 版本验证，低版本拒绝连接
 - [x] 9.10 实现外部 Agent 返回数据沙箱隔离处理（禁止宿主直接 eval）
@@ -122,9 +122,9 @@
 - [x] 10.1 集成本地轻量 NER 模型，实现手机号 / 身份证号 / 银行卡号 PII 检测
 - [x] 10.2 实现"发送前确认"模式 UI（Prompt 预览 + PII 高亮标注）
 - [x] 10.3 实现联系人姓名自动代号替换（会话级一致性）
-- [ ] 10.4 实现 GitHub Gist OAuth 授权流程（仅申请 gist 权限范围）
-- [ ] 10.5 实现 Argon2id passphrase → 密钥派生，AES-256-GCM 加密同步数据
-- [ ] 10.6 实现同步冲突检测与 diff 展示 UI，支持用户手动仲裁
+- [x] 10.4 实现 GitHub Gist OAuth 授权流程（仅申请 gist 权限范围）
+- [x] 10.5 实现 Argon2id passphrase → 密钥派生，AES-256-GCM 加密同步数据
+- [x] 10.6 实现同步冲突检测与 diff 展示 UI，支持用户手动仲裁
 - [x] 10.7 确认 API Key 字段在同步序列化时严格排除
 - [x] 10.8 实现本地快照保留（同步前自动备份，保留 7 天，防止数据丢失）
 

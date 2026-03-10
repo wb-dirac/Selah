@@ -38,6 +38,18 @@
 	<string>用于读取、创建和更新日历事件。</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>用于按需获取当前位置完成地点相关任务。</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>用于后台地理围栏监测，当进入或离开指定区域时触发任务。</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<!-- workmanager Flutter plugin uses this identifier for all Flutter background tasks -->
+		<string>be.tramckrijte.workmanager.iOSBackgroundTask</string>
+		<!-- Custom BGProcessingTask identifiers registered in AppDelegate -->
+		<string>com.personal-ai.tasks.morning_briefing</string>
+		<string>com.personal-ai.tasks.location_reminder</string>
+		<string>com.personal-ai.tasks.condition_check</string>
+		<string>com.personal-ai.tasks.periodic_summary</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
