@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:personal_ai_assistant/capability/feature_flags/feature_flag_service.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_gateway_resolver.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_notifier.dart';
@@ -17,6 +18,8 @@ import 'package:personal_ai_assistant/features/privacy/data/services/outbound_pr
 import 'package:personal_ai_assistant/features/privacy/data/services/privacy_preferences_service.dart';
 import 'package:personal_ai_assistant/features/privacy/presentation/widgets/privacy_review_dialogs.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_bridge_executor.dart';
+import 'package:personal_ai_assistant/features/voice/data/sherpa_onnx_local_speech_service.dart';
+import 'package:personal_ai_assistant/features/voice/data/voice_settings_service.dart';
 import 'package:personal_ai_assistant/orchestration/media/file_input_service.dart';
 import 'package:personal_ai_assistant/orchestration/media/image_input_service.dart';
 import 'package:personal_ai_assistant/presentation/screens/widgets/feature_disabled_view.dart';
@@ -248,6 +251,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       hasImages: false,
       hasAudio: true,
     );
+
+    final voiceSettings = await ref.read(voiceSettingsServiceProvider).load();
+    if (voiceSettings.enableLocalStt) {
+      final localSttText = await ref
+          .read(sherpaOnnxLocalSpeechServiceProvider)
+          .transcribeFile(recordedPath);
+
+      if ((localSttText ?? '').trim().isNotEmpty) {
+        await ref.read(chatNotifierProvider.notifier).sendMessage(
+          localSttText!.trim(),
+          selection.gateway,
+          images: const [],
+          audios: const [],
+          buildContext: context,
+        );
+        if (await audioFile.exists()) {
+          await audioFile.delete();
+        }
+        return;
+      }
+    }
 
     await ref.read(chatNotifierProvider.notifier).sendMessage(
       '',
@@ -612,29 +636,9 @@ class _MessageBubble extends ConsumerWidget {
             ...message.attachments
                 .where((a) => a.type == 'audio')
                 .map(
-                  (a) => Container(
-                    margin: const EdgeInsets.only(bottom: 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isUser
-                          ? theme.colorScheme.primaryContainer
-                          : theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.mic, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          '语音消息 · ${p.basename(a.filePath)}',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
+                  (a) => _AudioAttachmentPlayer(
+                    filePath: a.filePath,
+                    isUser: isUser,
                   ),
                 )
                 .toList(),
@@ -894,6 +898,103 @@ class _ToolCallStatusBar extends StatelessWidget {
                 color: theme.colorScheme.onSecondaryContainer,
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AudioAttachmentPlayer extends StatefulWidget {
+  const _AudioAttachmentPlayer({
+    required this.filePath,
+    required this.isUser,
+  });
+
+  final String filePath;
+  final bool isUser;
+
+  @override
+  State<_AudioAttachmentPlayer> createState() => _AudioAttachmentPlayerState();
+}
+
+class _AudioAttachmentPlayerState extends State<_AudioAttachmentPlayer> {
+  late final AudioPlayer _player;
+  Duration _duration = Duration.zero;
+  bool _isPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = AudioPlayer();
+    _initMetadata();
+    _player.playerStateStream.listen((state) {
+      if (!mounted) return;
+      setState(() {
+        _isPlaying = state.playing;
+      });
+    });
+  }
+
+  Future<void> _initMetadata() async {
+    try {
+      await _player.setFilePath(widget.filePath);
+      if (!mounted) return;
+      setState(() {
+        _duration = _player.duration ?? Duration.zero;
+      });
+    } catch (_) {
+      // Keep default duration on invalid files.
+    }
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _togglePlay() async {
+    if (_isPlaying) {
+      await _player.pause();
+      return;
+    }
+    await _player.play();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mm = _duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final ss = _duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: widget.isUser
+            ? theme.colorScheme.primaryContainer
+            : theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            iconSize: 18,
+            visualDensity: VisualDensity.compact,
+            onPressed: _togglePlay,
+            icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '语音消息  $mm:$ss',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            p.basename(widget.filePath),
+            style: theme.textTheme.labelSmall,
           ),
         ],
       ),

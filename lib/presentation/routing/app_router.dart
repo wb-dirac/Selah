@@ -13,6 +13,7 @@ import 'package:personal_ai_assistant/presentation/screens/settings/settings_scr
 import 'package:personal_ai_assistant/presentation/screens/settings/skill_management_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/settings/sync_settings_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/settings/tool_permissions_screen.dart';
+import 'package:personal_ai_assistant/presentation/screens/settings/voice_settings_screen.dart';
 import 'package:personal_ai_assistant/presentation/screens/tasks/tasks_screen.dart';
 
 class AppRouter {
@@ -99,6 +100,11 @@ class AppRouter {
                     path: 'sync',
                     name: 'settings-sync',
                     builder: (context, state) => const SyncSettingsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'voice',
+                    name: 'settings-voice',
+                    builder: (context, state) => const VoiceSettingsScreen(),
                   ),
                   GoRoute(
                     path: 'accessibility',

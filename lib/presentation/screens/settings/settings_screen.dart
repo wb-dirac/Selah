@@ -50,6 +50,12 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => context.push('/settings/sync'),
           ),
           ListTile(
+            leading: const Icon(Icons.record_voice_over_outlined),
+            title: const Text('语音设置'),
+            subtitle: const Text('自动播报 / TTS 提供商 / 本地 Sherpa 模型'),
+            onTap: () => context.push('/settings/voice'),
+          ),
+          ListTile(
             leading: const Icon(Icons.accessibility_new_outlined),
             title: const Text('无障碍'),
             subtitle: const Text('VoiceOver / TalkBack / 高对比度 / 字体缩放'),

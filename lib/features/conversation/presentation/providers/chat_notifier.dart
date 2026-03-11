@@ -13,6 +13,7 @@ import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_bridge_ex
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_call_result.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_spec_converter.dart';
 import 'package:personal_ai_assistant/features/voice/data/provider_tts_service.dart';
+import 'package:personal_ai_assistant/features/voice/data/voice_settings_service.dart';
 import 'package:personal_ai_assistant/orchestration/context/context_compressor.dart';
 import 'package:personal_ai_assistant/orchestration/media/image_input_service.dart';
 import 'package:personal_ai_assistant/orchestration/media/ocr_orchestration_service.dart';
@@ -752,7 +753,10 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       );
 
       if (autoPlayTts && parsed.content.trim().isNotEmpty) {
-        await ref.read(providerTtsServiceProvider).speakText(parsed.content);
+        final voiceSettings = await ref.read(voiceSettingsServiceProvider).load();
+        if (voiceSettings.autoPlayVoiceReply) {
+          await ref.read(providerTtsServiceProvider).speakText(parsed.content);
+        }
       }
 
       if (shouldGenerateTitle) {
