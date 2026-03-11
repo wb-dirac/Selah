@@ -78,11 +78,40 @@ class GeminiProvider implements LlmGateway {
         ],
       };
     }
+    final parts = <Map<String, dynamic>>[
+      if (message.content.trim().isNotEmpty)
+        {'text': message.content},
+      ...?(message.images?.map((image) {
+        final mime = image.mimeType.trim().isEmpty
+            ? 'image/jpeg'
+            : image.mimeType;
+        return {
+          'inlineData': {
+            'mimeType': mime,
+            'data': base64Encode(image.bytes),
+          },
+        };
+      })),
+      ...?(message.audios?.map((audio) {
+        final mime = audio.mimeType.trim().isEmpty
+            ? 'audio/m4a'
+            : audio.mimeType;
+        return {
+          'inlineData': {
+            'mimeType': mime,
+            'data': base64Encode(audio.bytes),
+          },
+        };
+      })),
+    ];
+
     return {
       'role': message.role == ChatRole.assistant ? 'model' : 'user',
-      'parts': [
-        {'text': message.content},
-      ],
+      'parts': parts.isEmpty
+          ? [
+              {'text': ''},
+            ]
+          : parts,
     };
   }
 

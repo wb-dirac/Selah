@@ -29,7 +29,7 @@
 
 ### 决策 1：跨平台框架选 Flutter 而非 React Native
 **选择**：Flutter  
-**原因**：原生渲染性能更好，Dart 生态对 FFI 调用 llama.cpp / Whisper.cpp 等原生库更直接；单代码库覆盖 iOS / Android / macOS / Windows 四端；生成式 UI 组件渲染一致性更高。  
+**原因**：原生渲染性能更好，Dart 生态对 FFI 调用 llama.cpp 等原生库更直接；单代码库覆盖 iOS / Android / macOS / Windows 四端；生成式 UI 组件渲染一致性更高。  
 **备选**：React Native（JS 桥接开销影响 LLM 推理性能；原生库集成更复杂）
 
 ### 决策 2：LLM 接入层统一抽象为 Gateway
@@ -77,7 +77,7 @@ LLMGateway
 - **iOS 后台执行时间受系统限制** → 降级为推送通知方案，任务逻辑执行移至前台打开时补偿
 - **Skill 沙箱性能开销（Pyodide ~2MB WASM 初始化）** → 懒加载，首次激活后缓存实例
 - **A2A 协议尚处早期，生态不成熟** → Phase 3 接入，保持 A2A 客户端为可替换的抽象层
-- **Whisper.cpp STT 在低端设备上延迟 >3s** → 提供云端 STT 备选，允许用户按场景切换
+- **多模态语音输入依赖云端提供商可用性** → 提供文本输入与离线模式降级；语音入口在无可用提供商时禁用并给出明确提示
 - **QuickJS 安全审计覆盖有限** → 用 AST 静态扫描作为第一道防线；QuickJS 无 DOM / 无文件系统访问作为第二层
 - **GitHub Gist 同步在弱网下可能冲突** → Last-write-wins + 同步前 diff 展示 + 本地快照保留 7 天
 

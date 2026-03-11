@@ -63,30 +63,30 @@ To run this project, ensure you have Flutter installed on your machine. Follow t
 
   根据对 lib 目录及相关实现文件的深入分析，现就 @openspec/changes/personal-ai-assistant/tasks.md 中标记为“已完成”任务的实际落实情况汇报如下：
 
-  1. 关键偏离与未实现项（重点关注）
+  1. [ ] 关键偏离与未实现项（重点关注）
 
 
-   * Task 2.3 & 4.10 (向量数据库集成):
+   * [ ] Task 2.3 & 4.10 (向量数据库集成):
        * 现状: sqlite-vec 向量扩展未实现。
        * 详情: 数据库 Schema 中 document_fragments 仅为普通表，embedding 以 TEXT 存储。相似度检索 (findSimilar) 实际上是在 Dart
          层加载所有数据到内存后，通过代码手动计算余弦相似度。这在大数据量下会产生严重的性能瓶颈，不符合“高性能向量扩展”的描述。
-   * Task 4.11 & 4.12 (本地语音 STT/TTS):
+   * [ ] Task 4.11 & 4.12 (本地语音 STT/TTS):
        * 现状: 未原生集成，高度依赖外部服务。
        * 详情: WhisperSttService 和 LocalTtsService 并非集成 C++ 库或原生模型，而是硬编码调用
          http://localhost:8880。这意味着应用必须依赖一个单独运行的本地服务器才能工作。
        * VAD 偏离: 任务提到的 Silero VAD 仅实现为简单的音频振幅阈值判断 (db > -40)。
-   * Task 9.5 (A2A mDNS 自动发现):
+   * [ ] Task 9.5 (A2A mDNS 自动发现):
        * 现状: 未实现 (Stub)。
        * 详情: MdnsDiscoveryService 仅包含一个 StubMdnsDiscoveryService 类，其 discover() 方法直接返回 Stream.empty()。
-   * Task 10.1 (本地 NER 模型 PII 检测):
+   * [ ] Task 10.1 (本地 NER 模型 PII 检测):
        * 现状: 实现方案降级。
        * 详情: 任务要求“集成本地轻量 NER 模型”，实际实现 (PiiDetectionService) 仅使用了正则表达式 (RegExp) 来匹配手机号、身份证和银行卡。
 
-  2. 部分实现与架构缺漏
+  2. [ ] 部分实现与架构缺漏
 
 
-   * Task 1.4 (Feature Flag): 基础设施极其简陋。仅在内存中维护一个 Map<AppFeatureModule, bool>，不支持持久化、远程配置或复杂的灰度策略。
-   * Task 8.2 - 8.6 (后台任务引擎):
+   * [ ] Task 1.4 (Feature Flag): 基础设施极其简陋。仅在内存中维护一个 Map<AppFeatureModule, bool>，不支持持久化、远程配置或复杂的灰度策略。
+   * [ ] Task 8.2 - 8.6 (后台任务引擎):
        * 移动端: 使用了 Workmanager 插件，但 backgroundCallbackDispatcher 核心回调函数目前是空桩 (Stub)，仅返回 true，未打通后台模型推理 (Task 8.6)。
        * 桌面端: 依赖 MethodChannel 调用原生代码，但 Dart 代码中已预警“Desktop platform channel not implemented”，原生层实现情况存疑。
 

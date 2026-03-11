@@ -46,10 +46,13 @@ class ChatGatewayResolver {
   Future<ResolvedChatGateway> resolveSelectionForInput({
     required String userContent,
     required bool hasImages,
+    bool hasAudio = false,
   }) async {
     final decision = await _routingSettingsService.decide(
       promptTokens: _estimatePromptTokens(userContent),
-      modality: hasImages ? RoutingModality.image : RoutingModality.text,
+      modality: (hasImages || hasAudio)
+          ? RoutingModality.image
+          : RoutingModality.text,
     );
 
     if (decision != null) {
@@ -77,10 +80,12 @@ class ChatGatewayResolver {
   Future<LlmGateway?> resolveForInput({
     required String userContent,
     required bool hasImages,
+    bool hasAudio = false,
   }) async {
     final selection = await resolveSelectionForInput(
       userContent: userContent,
       hasImages: hasImages,
+      hasAudio: hasAudio,
     );
     return selection.gateway;
   }

@@ -6,9 +6,6 @@
 - OCR 文字识别
 - 文件解析（PDF/Word/Excel）
 - 本地 RAG 问答
-- VAD 语音活动检测
-- 普通话 STT（Whisper.cpp，质量可接受）
-- 基础 TTS 合成
 - 声纹识别（识别是否为主人声音）
 - 所有本地数据存储和加密
 - 后台定时任务触发与推理
@@ -19,15 +16,16 @@
 |------|----------|----------|------|
 | 多模态图片问答 | LLaVA（质量有限） | GPT-4V / Gemini | 理解精度差距大 |
 | 复杂推理对话 | 本地大模型（7B+，耗内存） | Claude / GPT-4o | 能力差距明显 |
-| 高质量 TTS | Kokoro（音色少） | ElevenLabs / CosyVoice | 自然度差距 |
+| 语音消息理解 | 本地 STT + 文本模型（后续可选） | 多模态 LLM 音频输入 | 集成复杂度与准确率差距 |
+| 高质量 TTS | 本地 TTS（后续可选） | 供应商 TTS（OpenAI/Gemini/Azure/ElevenLabs） | 自然度与音色差距 |
 
 ### 7.3 必须依赖云端的能力 ☁️
 
 | 能力 | 原因 | 可用服务 |
 |------|------|----------|
-| **实时全双工语音对话** | 要求 < 500ms 延迟，本地 STT 无法达到 | OpenAI Realtime API, Gemini Live, 豆包 |
-| **方言 STT** | 本地开源模型方言支持极差 | 火山引擎、阿里云、百度语音 |
-| **高精度流式 STT** | 边说边识别需要云端专用架构 | Google STT, Azure Speech |
+| **实时全双工语音对话** | 要求 < 500ms 延迟和双向流式，依赖云端实时会话服务 | OpenAI Realtime API, Gemini Live, 豆包 |
+| **语音消息直传理解** | 当前方案直接使用多模态 LLM 音频能力 | Gemini, GPT-4o 音频多模态等 |
+| **供应商 TTS 自动播报** | 统一按用户选定供应商模型输出音频 | OpenAI TTS, Gemini TTS, Azure Speech, ElevenLabs |
 
 ### 7.4 用户选择策略设计
 

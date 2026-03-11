@@ -18,12 +18,24 @@ class ChatImage {
   final String mimeType;
 }
 
+/// An audio clip attached to a [ChatMessage] for multimodal LLM input.
+class ChatAudio {
+  const ChatAudio({required this.bytes, required this.mimeType});
+
+  /// Raw audio bytes.
+  final Uint8List bytes;
+
+  /// MIME type, e.g. 'audio/m4a', 'audio/wav'.
+  final String mimeType;
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.role,
     required this.content,
     this.name,
     this.images,
+    this.audios,
     this.toolCallId,
     this.toolCalls,
   });
@@ -39,6 +51,10 @@ class ChatMessage {
   /// Only meaningful for [ChatRole.user] messages.
   final List<ChatImage>? images;
 
+  /// Optional audio clips for multimodal input.
+  /// Only meaningful for [ChatRole.user] messages.
+  final List<ChatAudio>? audios;
+
   /// For [ChatRole.tool] messages: the provider-issued call ID to link
   /// this result back to the originating [ToolCallRequest].
   final String? toolCallId;
@@ -48,6 +64,9 @@ class ChatMessage {
 
   /// Whether this message contains image content.
   bool get hasImages => images != null && images!.isNotEmpty;
+
+  /// Whether this message contains audio content.
+  bool get hasAudios => audios != null && audios!.isNotEmpty;
 
   /// Whether this assistant message contains tool call requests.
   bool get hasToolCalls => toolCalls != null && toolCalls!.isNotEmpty;

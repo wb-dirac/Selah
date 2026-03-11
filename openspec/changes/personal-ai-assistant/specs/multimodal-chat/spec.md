@@ -46,22 +46,41 @@
 - **THEN** 系统 SHALL 在对话会话关闭时清除该文件的向量索引和提取文本缓存
 
 ### Requirement: 语音输入（普通模式）
-系统 SHALL 支持本地 STT 语音输入流程：VAD 检测 → Whisper.cpp 转写 → 文字发送给 LLM。
+系统 SHALL 支持用户录制语音消息并将音频直接发送给多模态 LLM，不经过本地 STT 文本化链路。
 
-#### Scenario: VAD 自动检测停止说话
-- **WHEN** 用户开始说话后停顿超过 1.5 秒
-- **THEN** 系统 SHALL 通过 Silero VAD 检测到语音结束，自动触发 STT 转写
+#### Scenario: 语音消息直传多模态模型
+- **WHEN** 用户完成一次语音输入并点击发送
+- **THEN** 系统 SHALL 将音频消息作为多模态输入直接发送给当前对话所选 LLM
 
-#### Scenario: STT 完成后自动发送（可配置）
-- **WHEN** STT 转写完成且用户已开启"自动发送"设置
-- **THEN** 系统 SHALL 直接将转写文字发送给 LLM；若"自动发送"关闭，则文字填入输入框等待用户确认
+#### Scenario: 语音消息本地保存
+- **WHEN** 语音消息发送成功
+- **THEN** 系统 SHALL 在本地会话中保存原始语音消息与元数据（时长、时间戳、提供商）用于历史回放与审计
 
 ### Requirement: 语音输出（TTS）
-系统 SHALL 使用本地 TTS（Kokoro / Piper）将 LLM 文字响应转为语音播放，并支持音色选择。
+系统 SHALL 使用用户选择的供应商 TTS 模型将 LLM 文字响应转为语音播放，并支持音色/模型选择。
 
-#### Scenario: 流式 TTS 播放
+#### Scenario: 语音输入后自动播放回复
+- **WHEN** 用户本轮输入为语音消息，且 AI 回复完成
+- **THEN** 系统 SHALL 自动调用当前选择的供应商 TTS 模型合成并播放该轮回复
+
+#### Scenario: 按句增量播放
 - **WHEN** LLM 流式输出文字
-- **THEN** 系统 SHALL 以句子为单位逐段送入 TTS 合成并立即播放，总延迟 < 1 秒（首句）
+- **THEN** 系统 SHALL 以句子为单位逐段调用供应商 TTS 并尽快连续播放
+
+### Requirement: 输入栏语义与按钮状态
+系统 SHALL 在输入栏中区分"全双工语音对话"和"语音消息输入"两种入口，并动态切换发送按钮图标。
+
+#### Scenario: 默认显示拨打图标
+- **WHEN** 输入框为空
+- **THEN** 主按钮 SHALL 显示拨打图标，点击后进入音频全双工对话
+
+#### Scenario: 输入文字后切换发送图标
+- **WHEN** 用户在输入框中输入任意非空文本
+- **THEN** 主按钮 SHALL 从拨打图标切换为发送图标，点击后发送文本消息
+
+#### Scenario: 麦克风图标触发语音消息输入
+- **WHEN** 用户点击或按住麦克风图标
+- **THEN** 系统 SHALL 进入语音消息录制流程，而非进入音频全双工对话
 
 ### Requirement: 实时全双工对话
 系统 SHALL 支持通过 OpenAI Realtime API / Gemini Live / 豆包实时语音 API 进行端到端延迟 < 500ms 的实时对话，并支持打断（Barge-in）。

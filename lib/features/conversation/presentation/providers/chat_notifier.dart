@@ -12,10 +12,25 @@ import 'package:personal_ai_assistant/features/llm_gateway/domain/llm_gateway.da
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_bridge_executor.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_call_result.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_spec_converter.dart';
+import 'package:personal_ai_assistant/features/voice/data/provider_tts_service.dart';
 import 'package:personal_ai_assistant/orchestration/context/context_compressor.dart';
 import 'package:personal_ai_assistant/orchestration/media/image_input_service.dart';
 import 'package:personal_ai_assistant/orchestration/media/ocr_orchestration_service.dart';
 import 'package:uuid/uuid.dart';
+
+class PickedAudio {
+  const PickedAudio({
+    required this.filePath,
+    this.mimeType,
+    this.sizeBytes,
+    this.durationMs,
+  });
+
+  final String filePath;
+  final String? mimeType;
+  final int? sizeBytes;
+  final int? durationMs;
+}
 
 class DisplayMessage {
   const DisplayMessage({
@@ -206,11 +221,12 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     String userContent,
     LlmGateway? gateway, {
     List<PickedImage> images = const [],
+    List<PickedAudio> audios = const [],
     BuildContext? buildContext,
   }) async {
     final current = state.value;
     if (current == null) return;
-    if (userContent.trim().isEmpty && images.isEmpty) return;
+    if (userContent.trim().isEmpty && images.isEmpty && audios.isEmpty) return;
 
     final service = ref.read(conversationServiceProvider);
 
@@ -229,10 +245,14 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     );
     final shouldGenerateTitle = !hasConversationTitle && !hasStartedConversation;
 
+    final normalizedUserContent = userContent.trim().isNotEmpty
+        ? userContent
+        : (audios.isNotEmpty ? '[语音消息]' : userContent);
+
     final userEntity = await service.addMessage(
       conversationId: conversationId,
       role: 'user',
-      content: userContent,
+      content: normalizedUserContent,
     );
 
     // Save image attachments to DB
@@ -250,9 +270,21 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       savedAttachments.add(attachment);
     }
 
+    // Save audio attachments to DB
+    for (final audio in audios) {
+      final attachment = await service.addAttachment(
+        messageId: userEntity.id,
+        type: 'audio',
+        filePath: audio.filePath,
+        mimeType: audio.mimeType,
+        sizeBytes: audio.sizeBytes,
+      );
+      savedAttachments.add(attachment);
+    }
+
     // Run local OCR on images to extract text for LLM context.
     // Per spec: "系统 SHALL 先调用本地 OCR 提取文字，将文字结果附加到 LLM 请求上下文"
-    String effectiveContent = userContent;
+    String effectiveContent = normalizedUserContent;
     if (images.isNotEmpty) {
       final ocrService = ref.read(ocrOrchestrationServiceProvider);
       final imagePaths = images.map((img) => img.filePath).toList();
@@ -268,7 +300,7 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     final userDisplay = DisplayMessage(
       id: userEntity.id,
       role: ChatRole.user,
-      content: userContent,
+      content: normalizedUserContent,
       createdAt: userEntity.createdAt,
       attachments: savedAttachments,
     );
@@ -302,6 +334,18 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       );
     }
 
+    // Convert picked audios to ChatAudio objects for multimodal LLM input
+    final chatAudios = <ChatAudio>[];
+    for (final audio in audios) {
+      final bytes = await File(audio.filePath).readAsBytes();
+      chatAudios.add(
+        ChatAudio(
+          bytes: bytes,
+          mimeType: audio.mimeType ?? 'audio/m4a',
+        ),
+      );
+    }
+
     final knowledgePromptContext = await ref
         .read(knowledgeRetrievalServiceProvider)
         .buildPromptContext(
@@ -314,8 +358,10 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
       service: service,
       conversationId: conversationId,
       parentMessageId: userEntity.id,
-      userContent: userContent,
+      userContent: normalizedUserContent,
       userImages: chatImages,
+      userAudios: chatAudios,
+      autoPlayTts: audios.isNotEmpty,
       knowledgePromptContext: knowledgePromptContext,
       ocrEnrichedContent: effectiveContent != userContent
           ? effectiveContent
@@ -506,6 +552,8 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     required String parentMessageId,
     required String userContent,
     List<ChatImage> userImages = const [],
+    List<ChatAudio> userAudios = const [],
+    bool autoPlayTts = false,
     String? knowledgePromptContext,
     String? ocrEnrichedContent,
     bool shouldGenerateTitle = false,
@@ -538,6 +586,20 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
             role: history[lastIdx].role,
             content: history[lastIdx].content,
             images: userImages,
+            audios: history[lastIdx].audios,
+          );
+        }
+      }
+
+      // Attach audios to the last user message if provided.
+      if (userAudios.isNotEmpty && history.isNotEmpty) {
+        final lastIdx = history.lastIndexWhere((m) => m.role == ChatRole.user);
+        if (lastIdx >= 0) {
+          history[lastIdx] = ChatMessage(
+            role: history[lastIdx].role,
+            content: history[lastIdx].content,
+            images: history[lastIdx].images,
+            audios: userAudios,
           );
         }
       }
@@ -688,6 +750,10 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
         raw: finalText,
         fallbackUserContent: userContent,
       );
+
+      if (autoPlayTts && parsed.content.trim().isNotEmpty) {
+        await ref.read(providerTtsServiceProvider).speakText(parsed.content);
+      }
 
       if (shouldGenerateTitle) {
         final fallbackTitle = _fallbackTitleFromInputs(

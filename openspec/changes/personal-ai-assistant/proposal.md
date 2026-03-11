@@ -19,7 +19,7 @@
 ### New Capabilities
 
 - `llm-gateway`: 统一 LLM 提供商接入层——支持 OpenAI Compatible / Anthropic / Gemini / 本地 Ollama，含模型路由策略、API Key 加密管理、Token 用量统计
-- `multimodal-chat`: 多模态对话能力——文字（Markdown 渲染）、图片（OCR + 多模态 LLM）、文件（PDF/Word/Excel RAG）、语音（Whisper STT + Kokoro TTS）及实时全双工语音模式
+- `multimodal-chat`: 多模态对话能力——文字（Markdown 渲染）、图片（OCR + 多模态 LLM）、文件（PDF/Word/Excel RAG）、语音（语音消息直传多模态 LLM + 供应商 TTS）及实时全双工语音模式
 - `generative-ui`: 生成式 UI 运行时——LLM 输出 JSON Schema 后本地渲染 Flutter 原生组件，内置 10+ 组件类型（product_card / map_preview / calendar_event 等），支持插件扩展注册
 - `tool-bridge`: 原生能力 Tool Bridge——四级权限模型（L0-L3），内置通信、日历、位置、文件、第三方 App URL Scheme 工具集，含工具调用透明度 UI
 - `agent-skill`: Agent Skill 沙箱宿主——完整实现 Anthropic Agent Skill 标准（SKILL.md 三层加载），Pyodide / QuickJS 沙箱隔离，Skill 市场多源聚合及安装时 AST 静态安全扫描
@@ -34,7 +34,7 @@
 ## Impact
 
 - **代码库**：在现有 Flutter 项目骨架（`lib/`）基础上全新构建，跨 iOS / Android / macOS / Windows 四平台
-- **依赖**：引入 llama.cpp / Ollama、SQLCipher、Pyodide、QuickJS、Whisper.cpp、Kokoro TTS、Silero VAD、sqlite-vec 等本地运行时依赖
+- **依赖**：引入 llama.cpp / Ollama、SQLCipher、Pyodide、QuickJS、sqlite-vec，以及供应商多模态音频与 TTS API 依赖
 - **安全**：全部敏感数据必须使用 OS 原生 KeyChain/KeyStore，日志系统必须脱敏 API Key
 - **网络**：默认隐私优先，Skill 沙箱及 PII 数据禁止直接出网；云端 LLM 调用明确告知用户
 - **平台 API**：iOS `BGTaskScheduler`、Android `WorkManager`、macOS/Windows 系统 Cron；iOS `HealthKit` 及 Android 厂商电池优化白名单需用户手动配置

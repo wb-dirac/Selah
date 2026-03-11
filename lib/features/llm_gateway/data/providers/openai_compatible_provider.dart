@@ -52,6 +52,48 @@ class OpenAiCompatibleProvider implements LlmGateway {
 						.toList(),
 			};
 		}
+		if (message.hasImages || message.hasAudios) {
+			final contentParts = <Map<String, dynamic>>[
+				if (message.content.trim().isNotEmpty)
+					{
+						'type': 'text',
+						'text': message.content,
+					},
+				...?(message.images?.map((image) {
+					final mime = image.mimeType.trim().isEmpty
+							? 'image/jpeg'
+							: image.mimeType;
+					final data = base64Encode(image.bytes);
+					return {
+						'type': 'image_url',
+						'image_url': {
+							'url': 'data:$mime;base64,$data',
+						},
+					};
+				})),
+				...?(message.audios?.map((audio) {
+					final format = audio.mimeType.contains('wav')
+							? 'wav'
+							: audio.mimeType.contains('mp3')
+							? 'mp3'
+							: 'm4a';
+					return {
+						'type': 'input_audio',
+						'input_audio': {
+							'data': base64Encode(audio.bytes),
+							'format': format,
+						},
+					};
+				})),
+			];
+
+			return {
+				'role': message.role.name,
+				'content': contentParts,
+				if (message.name != null) 'name': message.name,
+			};
+		}
+
 		return {
 			'role': message.role.name,
 			'content': message.content,

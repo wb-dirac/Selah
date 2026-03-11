@@ -3,6 +3,8 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:personal_ai_assistant/capability/feature_flags/feature_flag_service.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_gateway_resolver.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_notifier.dart';
@@ -15,10 +17,10 @@ import 'package:personal_ai_assistant/features/privacy/data/services/outbound_pr
 import 'package:personal_ai_assistant/features/privacy/data/services/privacy_preferences_service.dart';
 import 'package:personal_ai_assistant/features/privacy/presentation/widgets/privacy_review_dialogs.dart';
 import 'package:personal_ai_assistant/features/tool_bridge/domain/tool_bridge_executor.dart';
-import 'package:personal_ai_assistant/features/voice/presentation/widgets/voice_input_button.dart';
 import 'package:personal_ai_assistant/orchestration/media/file_input_service.dart';
 import 'package:personal_ai_assistant/orchestration/media/image_input_service.dart';
 import 'package:personal_ai_assistant/presentation/screens/widgets/feature_disabled_view.dart';
+import 'package:record/record.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -31,6 +33,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   final List<PickedImage> _stagedImages = [];
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  bool _isRecordingVoice = false;
 
   @override
   void initState() {
@@ -44,6 +48,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void dispose() {
     _textController.dispose();
     _scrollController.dispose();
+    _audioRecorder.dispose();
     super.dispose();
   }
 
@@ -55,6 +60,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final selection = await resolver.resolveSelectionForInput(
       userContent: text,
       hasImages: _stagedImages.isNotEmpty,
+      hasAudio: false,
     );
     final privacyPreferences = await ref
         .read(privacyPreferencesServiceProvider)
@@ -123,7 +129,140 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     await ref
         .read(chatNotifierProvider.notifier)
-      .sendMessage(outboundText, selection.gateway, images: images, buildContext: context);
+        .sendMessage(
+          outboundText,
+          selection.gateway,
+          images: images,
+          audios: const [],
+          buildContext: context,
+        );
+  }
+
+  Future<void> _recordAndSendVoiceMessage() async {
+    if (_isRecordingVoice) return;
+    final chatState = ref.read(chatNotifierProvider).value;
+    if (chatState?.isStreaming == true) return;
+
+    final hasPermission = await _audioRecorder.hasPermission();
+    if (!hasPermission) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('需要麦克风权限才能发送语音消息')),
+      );
+      return;
+    }
+
+    final tmpDir = await getTemporaryDirectory();
+    final path =
+        '${tmpDir.path}${Platform.pathSeparator}voice_msg_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+    final startedAt = DateTime.now();
+    await _audioRecorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        sampleRate: 16000,
+      ),
+      path: path,
+    );
+
+    if (!mounted) {
+      await _audioRecorder.stop();
+      return;
+    }
+
+    setState(() {
+      _isRecordingVoice = true;
+    });
+
+    final shouldSend =
+        await showModalBottomSheet<bool>(
+          context: context,
+          isDismissible: false,
+          enableDrag: false,
+          builder: (ctx) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '正在录音',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('点击“发送”结束录音并发送语音消息。'),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(false),
+                          child: const Text('取消'),
+                        ),
+                        const Spacer(),
+                        FilledButton.icon(
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          icon: const Icon(Icons.send),
+                          label: const Text('发送'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false;
+
+    final recordedPath = await _audioRecorder.stop();
+
+    if (mounted) {
+      setState(() {
+        _isRecordingVoice = false;
+      });
+    }
+
+    if (!shouldSend || recordedPath == null || recordedPath.trim().isEmpty) {
+      if (recordedPath != null) {
+        final abandoned = File(recordedPath);
+        if (await abandoned.exists()) {
+          await abandoned.delete();
+        }
+      }
+      return;
+    }
+
+    final audioFile = File(recordedPath);
+    if (!await audioFile.exists()) {
+      return;
+    }
+
+    final sizeBytes = await audioFile.length();
+    final durationMs = DateTime.now().difference(startedAt).inMilliseconds;
+
+    final resolver = ref.read(chatGatewayResolverProvider);
+    final selection = await resolver.resolveSelectionForInput(
+      userContent: '[语音消息]',
+      hasImages: false,
+      hasAudio: true,
+    );
+
+    await ref.read(chatNotifierProvider.notifier).sendMessage(
+      '',
+      selection.gateway,
+      images: const [],
+      audios: [
+        PickedAudio(
+          filePath: recordedPath,
+          mimeType: 'audio/m4a',
+          sizeBytes: sizeBytes,
+          durationMs: durationMs,
+        ),
+      ],
+      buildContext: context,
+    );
   }
 
   Future<void> _pickImage(ImageInputSource source) async {
@@ -379,7 +518,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 controller: _textController,
                 isStreaming: state.isStreaming,
                 hasStagedImages: _stagedImages.isNotEmpty,
+                isRecordingVoice: _isRecordingVoice,
                 onSend: _sendMessage,
+                onMicInput: _recordAndSendVoiceMessage,
+                onStartCall: () => context.push('/chat/voice'),
                 onAttach: _showAttachmentOptions,
               ),
             ],
@@ -465,6 +607,37 @@ class _MessageBubble extends ConsumerWidget {
                   .toList(),
             ),
             const SizedBox(height: 4),
+          ],
+          if (message.attachments.any((a) => a.type == 'audio')) ...[
+            ...message.attachments
+                .where((a) => a.type == 'audio')
+                .map(
+                  (a) => Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isUser
+                          ? theme.colorScheme.primaryContainer
+                          : theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.mic, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          '语音消息 · ${p.basename(a.filePath)}',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
           ],
           isUser
               ? Text(
@@ -554,14 +727,20 @@ class _InputRow extends StatelessWidget {
     required this.controller,
     required this.isStreaming,
     required this.hasStagedImages,
+    required this.isRecordingVoice,
     required this.onSend,
+    required this.onMicInput,
+    required this.onStartCall,
     this.onAttach,
   });
 
   final TextEditingController controller;
   final bool isStreaming;
   final bool hasStagedImages;
+  final bool isRecordingVoice;
   final VoidCallback onSend;
+  final Future<void> Function() onMicInput;
+  final VoidCallback onStartCall;
   final VoidCallback? onAttach;
 
   @override
@@ -598,19 +777,29 @@ class _InputRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            VoiceInputButton(enabled: !isStreaming),
+            IconButton(
+              icon: Icon(
+                isRecordingVoice ? Icons.fiber_manual_record : Icons.mic_outlined,
+              ),
+              tooltip: '语音输入',
+              onPressed: isStreaming || isRecordingVoice ? null : onMicInput,
+            ),
             const SizedBox(width: 4),
             ValueListenableBuilder<TextEditingValue>(
               valueListenable: controller,
               builder: (context, value, child) {
+                final hasText = value.text.trim().isNotEmpty;
                 final canSend =
                     !isStreaming &&
-                    (value.text.trim().isNotEmpty || hasStagedImages);
+                    (hasText || hasStagedImages);
+                final showSend = hasText;
                 return IconButton.filled(
                   key: const ValueKey('chat_send_button'),
-                  icon: const Icon(Icons.send),
-                  tooltip: '发送消息',
-                  onPressed: canSend ? onSend : null,
+                  icon: Icon(showSend ? Icons.send : Icons.call),
+                  tooltip: showSend ? '发送消息' : '音频全双工对话',
+                  onPressed: showSend
+                      ? (canSend ? onSend : null)
+                      : (isStreaming ? null : onStartCall),
                 );
               },
             ),
