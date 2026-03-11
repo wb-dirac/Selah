@@ -1,22 +1,34 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:personal_ai_assistant/features/voice/data/sherpa_onnx_model_download_service.dart';
+import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa_onnx;
 
 class SherpaOnnxLocalSpeechService {
   const SherpaOnnxLocalSpeechService({required this.modelDownloadService});
 
   final SherpaOnnxModelDownloadService modelDownloadService;
 
-  Future<bool> isLocalTtsReady() {
-    return modelDownloadService.isModelReady(SherpaModelKind.tts);
+  static bool _bindingsInitialized = false;
+
+  String get backendStatusDescription {
+    return '当前使用 sherpa_onnx 官方 Flutter 插件加载本地动态库并执行离线 STT/TTS。';
   }
 
-  Future<bool> isLocalSttReady() {
-    return modelDownloadService.isModelReady(SherpaModelKind.stt);
+  Future<bool> isLocalTtsReady() async {
+    if (!await modelDownloadService.isModelReady(SherpaModelKind.tts)) {
+      return false;
+    }
+    return _ensureBindingsInitialized();
+  }
+
+  Future<bool> isLocalSttReady() async {
+    if (!await modelDownloadService.isModelReady(SherpaModelKind.stt)) {
+      return false;
+    }
+    return _ensureBindingsInitialized();
   }
 
   Future<String?> transcribeFile(String audioPath) async {
@@ -24,36 +36,61 @@ class SherpaOnnxLocalSpeechService {
       return null;
     }
 
-    final bin = await _resolveExecutable('sherpa-onnx-offline', fallback: 'sherpa-onnx');
-    if (bin == null) {
+    final audioFile = File(audioPath);
+    if (!await audioFile.exists()) {
       return null;
     }
 
     final modelDir = await modelDownloadService.getModelDirectory(SherpaModelKind.stt);
-    final result = await Process.run(
-      bin.path,
-      <String>[
-        '--model-dir',
-        modelDir.path,
-        '--input',
-        audioPath,
-      ],
+    final modelPath = await _resolveFirstExisting(
+      modelDir,
+      const <String>['model.int8.onnx', 'model.onnx'],
     );
-
-    if (result.exitCode != 0) {
+    final tokensPath = await _resolveFirstExisting(
+      modelDir,
+      const <String>['tokens.txt'],
+    );
+    if (modelPath == null || tokensPath == null) {
       return null;
     }
 
-    final output = '${result.stdout}'.trim();
-    if (output.isEmpty) {
-      return null;
-    }
-
+    sherpa_onnx.OfflineRecognizer? recognizer;
+    sherpa_onnx.OfflineStream? stream;
     try {
-      final json = jsonDecode(output) as Map<String, dynamic>;
-      return (json['text'] as String?)?.trim();
+      final waveData = sherpa_onnx.readWave(audioPath);
+      if (waveData.sampleRate <= 0 || waveData.samples.isEmpty) {
+        return null;
+      }
+
+      final config = sherpa_onnx.OfflineRecognizerConfig(
+        feat: const sherpa_onnx.FeatureConfig(sampleRate: 16000, featureDim: 80),
+        model: sherpa_onnx.OfflineModelConfig(
+          senseVoice: sherpa_onnx.OfflineSenseVoiceModelConfig(
+            model: modelPath,
+            language: '',
+            useInverseTextNormalization: true,
+          ),
+          tokens: tokensPath,
+          numThreads: 2,
+          debug: false,
+          provider: 'cpu',
+        ),
+      );
+      recognizer = sherpa_onnx.OfflineRecognizer(config);
+      stream = recognizer.createStream();
+      stream.acceptWaveform(
+        samples: waveData.samples,
+        sampleRate: waveData.sampleRate,
+      );
+      recognizer.decode(stream);
+      final result = recognizer.getResult(stream);
+      final text = result.text.trim();
+      return text.isEmpty ? null : text;
     } catch (_) {
-      return output;
+      return null;
+    } finally {
+      stream?.free();
+      recognizer?.free();
     }
   }
 
@@ -64,62 +101,91 @@ class SherpaOnnxLocalSpeechService {
       return null;
     }
 
-    final bin = await _resolveExecutable('sherpa-onnx-tts');
-    if (bin == null) {
+    final modelDir = await modelDownloadService.getModelDirectory(SherpaModelKind.tts);
+    final modelPath = await _resolveFirstExisting(
+      modelDir,
+      const <String>['model.onnx', 'model.int8.onnx'],
+    );
+    final lexiconPath = await _resolveFirstExisting(
+      modelDir,
+      const <String>['lexicon.txt'],
+    );
+    final tokensPath = await _resolveFirstExisting(
+      modelDir,
+      const <String>['tokens.txt'],
+    );
+    if (modelPath == null || lexiconPath == null || tokensPath == null) {
       return null;
     }
 
-    final modelDir = await modelDownloadService.getModelDirectory(SherpaModelKind.tts);
     final tmpDir = await getTemporaryDirectory();
     final outputPath = p.join(
       tmpDir.path,
       'sherpa_tts_${DateTime.now().millisecondsSinceEpoch}.wav',
     );
 
-    final result = await Process.run(
-      bin.path,
-      <String>[
-        '--model-dir',
-        modelDir.path,
-        '--text',
-        normalized,
-        '--output',
-        outputPath,
-      ],
-    );
+    sherpa_onnx.OfflineTts? tts;
+    try {
+      final config = sherpa_onnx.OfflineTtsConfig(
+        model: sherpa_onnx.OfflineTtsModelConfig(
+          vits: sherpa_onnx.OfflineTtsVitsModelConfig(
+            model: modelPath,
+            lexicon: lexiconPath,
+            tokens: tokensPath,
+            dataDir: modelDir.path,
+          ),
+          numThreads: 2,
+          debug: false,
+          provider: 'cpu',
+        ),
+      );
+      tts = sherpa_onnx.OfflineTts(config);
+      final audio = tts.generate(text: normalized, speed: 1.0);
+      final ok = sherpa_onnx.writeWave(
+        filename: outputPath,
+        samples: audio.samples,
+        sampleRate: audio.sampleRate,
+      );
+      if (!ok) {
+        return null;
+      }
 
-    if (result.exitCode != 0) {
+      final outFile = File(outputPath);
+      if (!await outFile.exists()) {
+        return null;
+      }
+
+      return outFile;
+    } catch (_) {
       return null;
+    } finally {
+      tts?.free();
     }
-
-    final outFile = File(outputPath);
-    if (!await outFile.exists()) {
-      return null;
-    }
-
-    return outFile;
   }
 
-  Future<File?> _resolveExecutable(String baseName, {String? fallback}) async {
-    final root = await getApplicationSupportDirectory();
-    final binDir = Directory(p.join(root.path, 'sherpa_onnx', 'bin'));
-    if (!await binDir.exists()) {
-      return null;
+  bool _ensureBindingsInitialized() {
+    if (_bindingsInitialized) {
+      return true;
     }
+    try {
+      sherpa_onnx.initBindings();
+      _bindingsInitialized = true;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
-    final candidates = <String>[
-      if (Platform.isWindows) '$baseName.exe' else baseName,
-      if (fallback != null && Platform.isWindows) '$fallback.exe',
-      if (fallback != null && !Platform.isWindows) fallback,
-    ];
-
-    for (final name in candidates) {
-      final file = File(p.join(binDir.path, name));
+  Future<String?> _resolveFirstExisting(
+    Directory dir,
+    List<String> fileNames,
+  ) async {
+    for (final name in fileNames) {
+      final file = File(p.join(dir.path, name));
       if (await file.exists()) {
-        return file;
+        return file.path;
       }
     }
-
     return null;
   }
 }

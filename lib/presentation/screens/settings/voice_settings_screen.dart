@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/domain/provider_management_service.dart';
@@ -31,6 +33,8 @@ class VoiceSettingsScreen extends ConsumerWidget {
     final providersAsync = ref.watch(voiceSettingsProvidersProvider);
     final ttsReadyAsync = ref.watch(sherpaLocalTtsReadyProvider);
     final sttReadyAsync = ref.watch(sherpaLocalSttReadyProvider);
+    final downloadService = ref.watch(sherpaOnnxModelDownloadServiceProvider);
+    final localSpeechService = ref.watch(sherpaOnnxLocalSpeechServiceProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('语音设置')),
@@ -80,12 +84,22 @@ class VoiceSettingsScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               Card(
+                child: ListTile(
+                  leading: const Icon(Icons.memory_outlined),
+                  title: const Text('本地语音运行时'),
+                  subtitle: Text(localSpeechService.backendStatusDescription),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Card(
                 child: Column(
                   children: [
                     SwitchListTile(
                       value: settings.enableLocalTts,
                       title: const Text('启用本地 TTS（Sherpa-ONNX）'),
-                      subtitle: Text(ttsReady ? '模型已就绪' : '模型未下载'),
+                      subtitle: Text(
+                        ttsReady ? '模型与 sherpa_onnx 运行时已就绪' : '模型未下载或运行时未加载成功',
+                      ),
                       onChanged: (value) async {
                         await _save(ref, settings.copyWith(enableLocalTts: value));
                       },
@@ -93,7 +107,7 @@ class VoiceSettingsScreen extends ConsumerWidget {
                     ListTile(
                       leading: const Icon(Icons.download_outlined),
                       title: const Text('下载本地 TTS 模型'),
-                      subtitle: const Text('按需下载到本机，下载后可离线合成'),
+                      subtitle: Text(downloadService.displayName(SherpaModelKind.tts)),
                       onTap: () => _downloadModel(
                         context,
                         ref,
@@ -104,7 +118,9 @@ class VoiceSettingsScreen extends ConsumerWidget {
                     SwitchListTile(
                       value: settings.enableLocalStt,
                       title: const Text('启用本地 STT（Sherpa-ONNX）'),
-                      subtitle: Text(sttReady ? '模型已就绪' : '模型未下载'),
+                      subtitle: Text(
+                        sttReady ? '模型与 sherpa_onnx 运行时已就绪' : '模型未下载或运行时未加载成功',
+                      ),
                       onChanged: (value) async {
                         await _save(ref, settings.copyWith(enableLocalStt: value));
                       },
@@ -112,7 +128,7 @@ class VoiceSettingsScreen extends ConsumerWidget {
                     ListTile(
                       leading: const Icon(Icons.download_outlined),
                       title: const Text('下载本地 STT 模型'),
-                      subtitle: const Text('按需下载到本机，下载后可离线转写'),
+                      subtitle: Text(downloadService.displayName(SherpaModelKind.stt)),
                       onTap: () => _downloadModel(
                         context,
                         ref,
@@ -145,21 +161,45 @@ class VoiceSettingsScreen extends ConsumerWidget {
     SherpaModelKind kind,
   ) async {
     final label = kind == SherpaModelKind.tts ? 'TTS' : 'STT';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('开始下载 $label 模型...')),
+    final service = ref.read(sherpaOnnxModelDownloadServiceProvider);
+    final modelInfo = service.displayName(kind);
+
+    // ValueNotifier drives the progress dialog without needing StatefulWidget.
+    final progressNotifier = ValueNotifier<_DownloadProgress>(
+      const _DownloadProgress(downloaded: 0, total: -1),
     );
+
+    if (!context.mounted) return;
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _ModelDownloadDialog(
+          label: label,
+          modelInfo: modelInfo,
+          progressNotifier: progressNotifier,
+        ),
+      ),
+    );
+
     try {
-      await ref
-          .read(sherpaOnnxModelDownloadServiceProvider)
-          .downloadModel(kind);
+      await service.downloadModel(
+        kind,
+        onProgress: (downloaded, total) {
+          progressNotifier.value =
+              _DownloadProgress(downloaded: downloaded, total: total);
+        },
+      );
       ref.invalidate(sherpaLocalTtsReadyProvider);
       ref.invalidate(sherpaLocalSttReadyProvider);
       if (!context.mounted) return;
+      Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('$label 模型下载完成')),
       );
     } catch (error) {
       if (!context.mounted) return;
+      Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('$label 模型下载失败：$error')),
       );
@@ -268,5 +308,67 @@ class VoiceSettingsScreen extends ConsumerWidget {
       }
     }
     return providerId;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Progress helpers
+// ---------------------------------------------------------------------------
+
+class _DownloadProgress {
+  const _DownloadProgress({required this.downloaded, required this.total});
+  final int downloaded;
+  final int total;
+}
+
+class _ModelDownloadDialog extends StatelessWidget {
+  const _ModelDownloadDialog({
+    required this.label,
+    required this.modelInfo,
+    required this.progressNotifier,
+  });
+
+  final String label;
+  final String modelInfo;
+  final ValueNotifier<_DownloadProgress> progressNotifier;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('下载 $label 模型'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(modelInfo, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 16),
+          ValueListenableBuilder<_DownloadProgress>(
+            valueListenable: progressNotifier,
+            builder: (ctx, progress, _) {
+              final percentage =
+                  progress.total > 0 ? progress.downloaded / progress.total : null;
+              final downloadedMb =
+                  (progress.downloaded / 1048576).toStringAsFixed(1);
+              final totalMb = progress.total > 0
+                  ? (progress.total / 1048576).toStringAsFixed(1)
+                  : '?';
+              final isExtracting =
+                  progress.total > 0 && progress.downloaded >= progress.total;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LinearProgressIndicator(value: percentage),
+                  const SizedBox(height: 8),
+                  Text(
+                    isExtracting ? '正在解压...' : '$downloadedMb MB / $totalMb MB',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -79,3 +79,5 @@ dart tool/verify.dart
 - test/integration/   集成测试
 - test/performance/   性能基准
 - test/golden/        视觉回归
+
+## 完成任务后确保编译通过,然后创建git提交

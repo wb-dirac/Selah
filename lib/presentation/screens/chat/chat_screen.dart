@@ -1,11 +1,12 @@
 import 'dart:io';
+
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:personal_ai_assistant/capability/feature_flags/feature_flag_service.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_gateway_resolver.dart';
 import 'package:personal_ai_assistant/features/conversation/presentation/providers/chat_notifier.dart';
@@ -155,15 +156,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       return;
     }
 
+    final voiceSettings = await ref.read(voiceSettingsServiceProvider).load();
+    final useLocalStt = voiceSettings.enableLocalStt;
     final tmpDir = await getTemporaryDirectory();
+    final extension = useLocalStt ? 'wav' : 'm4a';
     final path =
-        '${tmpDir.path}${Platform.pathSeparator}voice_msg_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        '${tmpDir.path}${Platform.pathSeparator}voice_msg_${DateTime.now().millisecondsSinceEpoch}.$extension';
 
     final startedAt = DateTime.now();
     await _audioRecorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.aacLc,
+      RecordConfig(
+        encoder: useLocalStt ? AudioEncoder.wav : AudioEncoder.aacLc,
         sampleRate: 16000,
+        numChannels: 1,
       ),
       path: path,
     );
@@ -252,13 +257,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       hasAudio: true,
     );
 
-    final voiceSettings = await ref.read(voiceSettingsServiceProvider).load();
-    if (voiceSettings.enableLocalStt) {
+    if (useLocalStt) {
       final localSttText = await ref
           .read(sherpaOnnxLocalSpeechServiceProvider)
           .transcribeFile(recordedPath);
 
       if ((localSttText ?? '').trim().isNotEmpty) {
+        if (!mounted) return;
         await ref.read(chatNotifierProvider.notifier).sendMessage(
           localSttText!.trim(),
           selection.gateway,
@@ -273,6 +278,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     }
 
+    if (!mounted) return;
     await ref.read(chatNotifierProvider.notifier).sendMessage(
       '',
       selection.gateway,
@@ -280,7 +286,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       audios: [
         PickedAudio(
           filePath: recordedPath,
-          mimeType: 'audio/m4a',
+          mimeType: useLocalStt ? 'audio/wav' : 'audio/m4a',
           sizeBytes: sizeBytes,
           durationMs: durationMs,
         ),
@@ -640,8 +646,7 @@ class _MessageBubble extends ConsumerWidget {
                     filePath: a.filePath,
                     isUser: isUser,
                   ),
-                )
-                .toList(),
+                ),
           ],
           isUser
               ? Text(
