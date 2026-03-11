@@ -31,7 +31,7 @@ class _NoopKeychain implements KeychainService {
 }
 
 void main() {
-  const _apiKey = 'sk-ant-test-1234567890123456789012345678901234567890';
+  const apiKey = 'sk-ant-test-1234567890123456789012345678901234567890';
 
   group('AnthropicProvider – function calling', () {
     test('serialises tools in Anthropic format (name/description/input_schema)', () async {
@@ -53,7 +53,7 @@ void main() {
 
       final provider = AnthropicProvider(
         config: const AnthropicProviderConfig(),
-        keyStore: _FakeKeyStore(_apiKey),
+        keyStore: _FakeKeyStore(apiKey),
         httpClient: SecureHttpClient(client: mockClient),
       );
 
@@ -102,7 +102,7 @@ void main() {
 
       final provider = AnthropicProvider(
         config: const AnthropicProviderConfig(),
-        keyStore: _FakeKeyStore(_apiKey),
+        keyStore: _FakeKeyStore(apiKey),
         httpClient: SecureHttpClient(client: mockClient),
       );
 
@@ -150,7 +150,7 @@ void main() {
 
       final provider = AnthropicProvider(
         config: const AnthropicProviderConfig(),
-        keyStore: _FakeKeyStore(_apiKey),
+        keyStore: _FakeKeyStore(apiKey),
         httpClient: SecureHttpClient(client: mockClient),
       );
 
@@ -183,7 +183,7 @@ void main() {
 
       final provider = AnthropicProvider(
         config: const AnthropicProviderConfig(),
-        keyStore: _FakeKeyStore(_apiKey),
+        keyStore: _FakeKeyStore(apiKey),
         httpClient: SecureHttpClient(client: mockClient),
       );
 

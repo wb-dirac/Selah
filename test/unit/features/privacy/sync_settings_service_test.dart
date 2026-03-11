@@ -5,6 +5,8 @@ import 'package:personal_ai_assistant/core/network/secure_http_client.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/data/provider_api_key_store.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/domain/provider_health_check_service.dart';
 import 'package:personal_ai_assistant/features/llm_gateway/domain/provider_management_service.dart';
+import 'package:personal_ai_assistant/features/privacy/data/services/gist_encryption_service.dart';
+import 'package:personal_ai_assistant/features/privacy/data/services/github_gist_service.dart';
 import 'package:personal_ai_assistant/features/privacy/data/services/sync_settings_service.dart';
 import 'package:personal_ai_assistant/storage/config/keychain_preferences_store.dart';
 
@@ -56,6 +58,8 @@ void main() {
       service = SyncSettingsService(
         preferences: preferences,
         providerManagementService: providerManagementService,
+        encryptionService: const GistEncryptionService(),
+        gistService: GitHubGistService(preferences: preferences),
       );
     });
 
